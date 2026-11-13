@@ -26,7 +26,8 @@
     "examples",
     "AGENTS.md",
     "README.md",
-    "LICENSE"
+    "LICENSE",
+    ".env.example"
   ],
   "engines": {
     "node": ">=20.12"

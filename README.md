@@ -34,7 +34,7 @@ Or run it without installing: `npx github:PointBlueTechnology/access-manager-cli
 
 ## Connecting
 
-Settings come from environment variables, or from an env file given with `--env-file` or `AMCLI_ENV_FILE`:
+Settings come from environment variables, or from an env file given with `--env-file` or `AMCLI_ENV_FILE`. [.env.example](.env.example) lists them all; copy it to `.env`, which git ignores:
 
 | Variable | Meaning |
 |---|---|
