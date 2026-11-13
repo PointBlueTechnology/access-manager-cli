@@ -12,6 +12,8 @@ export const EXIT = {
     CONNECTION: 6,
     TIMEOUT: 7,
     CONFIRM: 8,
+    /** diff --exit-code: the two differ (not an error) */
+    DIFFERENT: 9,
 } as const;
 
 export type ErrorCode = keyof typeof EXIT;

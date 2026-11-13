@@ -363,7 +363,11 @@ export async function runExport(nam: Nam, options: ExportOptions): Promise<Recor
                 }
                 for (const concrete of paths) {
                     const response = await walker.fetch(api.prefix + concrete);
-                    if (response.status >= 200 && response.status < 300) {
+                    if (response.status >= 200 && response.status < 300 && /<html[\s>]/i.test(typeof response.body === 'string' ? response.body : JSON.stringify(response.body))) {
+                        // A sign-in page instead of data, as when a protocol isn't turned on
+                        walker.manifest.push({ ...entry, path: concrete, status: response.status, skipped: 'returned a web page, not data (the feature may be off)' });
+                        skipped++;
+                    } else if (response.status >= 200 && response.status < 300) {
                         walker.manifest.push({ ...entry, path: concrete, status: response.status, file: walker.write(api.name, concrete, response.body) });
                         saved++;
                     } else {

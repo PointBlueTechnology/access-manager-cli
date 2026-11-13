@@ -177,3 +177,53 @@ test('idsFrom takes IDs from the shallowest list that has them, and can filter',
     assert.deepEqual(idsFrom({ list: { item: [{ uri: 'https://ac/amsvc/v1/things/T1' }] } }, ['x'], '/amsvc/v1/things'), ['T1']);
     assert.deepEqual(idsFrom([{ id: 'ST1' }, { id: 'LT2' }], ['id'], undefined, item => String(item.id).startsWith('ST')), ['ST1']);
 });
+
+test('diffValues pairs list items by ID, ignores order and normalizes signed metadata', async () => {
+    const { diffValues, normalizeText } = await import('../src/diff.ts');
+    const ignore = new Set<string>();
+    assert.deepEqual(diffValues([{ id: 'A', v: 1 }, { id: 'B', v: 2 }], [{ id: 'B', v: 2 }, { id: 'A', v: 1 }], ignore), []);
+    assert.deepEqual(diffValues([{ id: 'A', v: 1 }], [{ id: 'A', v: 2 }, { id: 'C', v: 3 }], ignore), [
+        { path: '[id=A].v', kind: 'changed', from: 1, to: 2 },
+        { path: '[id=C]', kind: 'added', to: { id: 'C', v: 3 } },
+    ]);
+    assert.deepEqual(diffValues(['x', 'y'], ['y', 'x'], ignore), []);
+    const signed = (id: string, sig: string) => `<md:EntityDescriptor ID="${id}" entityID="e"><ds:SignatureValue>${sig}</ds:SignatureValue><md:IDPSSODescriptor ID="${id}2"/></md:EntityDescriptor>`;
+    assert.equal(normalizeText(signed('a1', 'xx')), normalizeText(signed('b2', 'yy')));
+});
+
+test('readZip opens a ZipCrypto zip, and parseXml finds elements and attributes', async () => {
+    const { execFileSync } = await import('node:child_process');
+    const fs = await import('node:fs');
+    const os = await import('node:os');
+    const path = await import('node:path');
+    const { readZip } = await import('../src/zip.ts');
+    const { parseXml, findAll } = await import('../src/xml.ts');
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'amcli-'));
+    fs.mkdirSync(path.join(dir, 'agConfig'));
+    fs.writeFileSync(path.join(dir, 'agConfig/AG_AgConfig.xml'), '<?xml version="1.0"?><A><B Name="one &amp; two"/><B Name=\'x\'><C/></B><!-- note --></A>'.repeat(3));
+    execFileSync('zip', ['-q', '-r', '-P', 'secret-pw', 'out.zip', 'agConfig'], { cwd: dir });
+    const entries = readZip(fs.readFileSync(path.join(dir, 'out.zip')), 'secret-pw');
+    const xml = entries.get('agConfig/AG_AgConfig.xml')!.toString();
+    assert.ok(xml.startsWith('<?xml'));
+    const names = findAll(parseXml(xml), 'B').map(b => b.attrs.Name);
+    assert.deepEqual(names, ['one & two', 'x', 'one & two', 'x', 'one & two', 'x']);
+    assert.throws(() => readZip(fs.readFileSync(path.join(dir, 'out.zip'))), /needs a password/);
+    fs.rmSync(dir, { recursive: true, force: true });
+});
+
+test('certificate dates and PEM layout', async () => {
+    const { parseDate, formatPem } = await import('../src/certs.ts');
+    assert.equal(parseDate('Monday, July 21, 2025 at 6:14:57 PM GMT')?.toISOString(), '2025-07-21T18:14:57.000Z');
+    assert.equal(parseDate('nonsense'), undefined);
+    const body = 'A'.repeat(100);
+    assert.equal(formatPem(`-----BEGIN CERTIFICATE-----${body}-----END CERTIFICATE-----`), `-----BEGIN CERTIFICATE-----\n${'A'.repeat(64)}\n${'A'.repeat(36)}\n-----END CERTIFICATE-----\n`);
+});
+
+test('contractRefs finds contract IDs under contract-named keys and their children', async () => {
+    const { contractRefs } = await import('../src/saml.ts');
+    assert.deepEqual(contractRefs({
+        authCardConfig: { authContracts: ['ALC1'] },
+        providerAccessSettings: { satisfiesContractList: { refId: [{ value: 'ALC2' }] } },
+        other: 'ALC3',
+    }).sort(), ['ALC1', 'ALC2']);
+});

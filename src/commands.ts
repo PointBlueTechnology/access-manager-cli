@@ -1,8 +1,14 @@
 import fs from 'node:fs';
+import os from 'node:os';
 import * as afc from './afc.ts';
 import { Backup, execute, plan, readApplyFile } from './apply.ts';
+import { getCert, listCerts } from './certs.ts';
+import * as saml from './saml.ts';
+import { diffExports, exportedApis } from './diff.ts';
+import { CliError, EXIT, usage } from './errors.ts';
 import { runExport } from './export.ts';
-import { CliError, usage } from './errors.ts';
+import { progress } from './output.ts';
+import { accessGatewayConfigs, buildReport, toMarkdown } from './report.ts';
 import { changes, classBody, classView, contractBody, contractView, methodBody, methodView } from './model.ts';
 import type { Properties, PropertyChange } from './model.ts';
 import { kindLabel } from './nam.ts';
@@ -522,6 +528,207 @@ export const COMMANDS: Command[] = [
         },
     },
     {
+        name: 'diff', summary: 'Compare two exports, or an export with the console as it is now (--live)', args: '<export> [<export>]',
+        options: {
+            live: { type: 'boolean', description: 'Compare the export with a fresh export of the console' },
+            save: { type: 'string', description: 'With --live, keep the fresh export in this new folder (default: delete it)' },
+            only: { type: 'string', multiple: true, description: 'Only files under this path in the exports, e.g. apply or nps/api/v1/clusters (repeatable)' },
+            ignore: { type: 'string', multiple: true, description: 'A key whose changes don\'t count, e.g. modified (repeatable)' },
+            summary: { type: 'boolean', description: 'Only the counts and the lists of files, without each change' },
+            'include-status': { type: 'boolean', description: 'Also count status changes: pending Updates, health' },
+            'exit-code': { type: 'boolean', description: 'Exit with 9 when they differ, as for monitoring' },
+        },
+        run: async c => {
+            const [a, b, ...rest] = c.positionals;
+            if (!a || rest.length || (flag(c, 'live') ? b : !b)) {
+                throw usage('diff takes two export folders, or one with --live');
+            }
+            let other = b;
+            let temporary: string | undefined;
+            if (flag(c, 'live')) {
+                other = str(c, 'save') ?? fs.mkdtempSync(`${os.tmpdir()}/amcli-live-`);
+                temporary = str(c, 'save') ? undefined : other;
+                if (temporary) {
+                    fs.rmSync(temporary, { recursive: true, force: true });
+                }
+                progress(`Exporting the console as it is now, to compare with ${a}`, c.quiet);
+                await runExport(c.nam(), { out: other, apis: exportedApis(a), runtime: false, afcFiles: fs.existsSync(`${a}/afc`), revealSecrets: false, quiet: true });
+            }
+            try {
+                const result = diffExports(a, other!, { only: list(c, 'only'), ignore: list(c, 'ignore'), includeStatus: flag(c, 'include-status') });
+                if (flag(c, 'exit-code') && !result.summary.same) {
+                    process.exitCode = EXIT.DIFFERENT;
+                }
+                const shown = { ...result, b: temporary ? 'the console now' : result.b };
+                return flag(c, 'summary') ? { a: shown.a, b: shown.b, summary: shown.summary, onlyInA: shown.onlyInA, onlyInB: shown.onlyInB, changedFiles: shown.changed.map(f => f.file) } : shown;
+            } finally {
+                if (temporary) {
+                    fs.rmSync(temporary, { recursive: true, force: true });
+                }
+            }
+        },
+    },
+    {
+        name: 'certs list', summary: 'The console\'s certificates and trusted roots, soonest to expire first, with the days each has left',
+        options: {
+            expired: { type: 'boolean', description: 'Only expired ones' },
+            expiring: { type: 'string', description: 'Only ones expiring within this many days (expired ones included)' },
+            'trusted-roots': { type: 'boolean', description: 'Only trusted roots' },
+            fail: { type: 'boolean', description: 'Exit with 9 if any are listed, as for monitoring' },
+        },
+        run: async c => {
+            const within = int(c, 'expiring');
+            let certs = await listCerts(c.nam().client);
+            if (flag(c, 'expired')) {
+                certs = certs.filter(cert => cert.expired);
+            }
+            if (within !== undefined) {
+                certs = certs.filter(cert => cert.daysLeft !== undefined && cert.daysLeft <= within);
+            }
+            if (flag(c, 'trusted-roots')) {
+                certs = certs.filter(cert => cert.trustedRoot);
+            }
+            if (flag(c, 'fail') && certs.length) {
+                process.exitCode = EXIT.DIFFERENT;
+            }
+            return certs;
+        },
+    },
+    {
+        name: 'certs get', summary: 'One certificate; a trusted root comes with its PEM', args: '<name>',
+        options: { output: { type: 'string', short: 'o', description: 'Save a trusted root\'s PEM to this file' } },
+        run: async c => {
+            const name = one(c, 'certificate');
+            const cert = await getCert(c.nam().client, name);
+            const output = str(c, 'output');
+            if (output) {
+                if (!cert.pem) {
+                    throw usage(`${cert.name} isn't a trusted root; the API only returns trusted roots' PEM`);
+                }
+                fs.writeFileSync(output, cert.pem);
+                return { ...cert, pem: undefined, saved: output };
+            }
+            return cert;
+        },
+    },
+    { name: 'saml list', summary: 'SAML 2 service providers and identity providers the cluster trusts', run: async c => saml.listProviders(c.nam()) },
+    {
+        name: 'saml get', summary: 'One SAML provider\'s settings, with the contracts it uses by name', args: '<name|id|entityID>',
+        options: { type: { type: 'string', description: 'sp or idp, when a name is used by both' }, ...RAW },
+        run: async c => {
+            const ref = one(c, 'SAML provider');
+            const type = str(c, 'type') as saml.ProviderType | undefined;
+            const nam = c.nam();
+            const { provider, detail } = await saml.getProvider(nam, ref, type);
+            if (flag(c, 'raw')) {
+                return detail;
+            }
+            const contracts = await nam.names('contract', saml.contractRefs(detail));
+            const { nidsTrustedProviderMetadata: _metadata, ...settings } = detail;
+            return { ...provider, contracts, settings, metadata: 'amcli saml metadata ' + JSON.stringify(provider.name) };
+        },
+    },
+    {
+        name: 'saml metadata', summary: 'A SAML provider\'s metadata, as XML', args: '<name|id|entityID>',
+        options: { type: { type: 'string', description: 'sp or idp, when a name is used by both' }, output: { type: 'string', short: 'o', description: 'Save it to this file' } },
+        run: async c => {
+            const ref = one(c, 'SAML provider');
+            const { provider, detail } = await saml.getProvider(c.nam(), ref, str(c, 'type') as saml.ProviderType | undefined);
+            const xml = saml.metadataOf(detail);
+            if (!xml) {
+                throw new CliError('NOT_FOUND', `${provider.name} has no stored metadata`);
+            }
+            const output = str(c, 'output');
+            if (output) {
+                fs.writeFileSync(output, xml);
+                return { provider: provider.name, entityId: provider.entityId, saved: output, bytes: Buffer.byteLength(xml) };
+            }
+            return { provider: provider.name, entityId: provider.entityId, metadata: xml };
+        },
+    },
+    {
+        name: 'saml create-sp', summary: 'Trust a new SAML service provider, from its metadata', writes: true,
+        options: {
+            name: { type: 'string', description: 'Display name' },
+            metadata: { type: 'string', description: 'Its metadata, as a file' },
+            'metadata-url': { type: 'string', description: 'Or the URL the console reads it from' },
+            ...DRY,
+        },
+        run: async c => {
+            const name = str(c, 'name');
+            if (!name) {
+                throw usage('saml create-sp needs --name');
+            }
+            const source = { file: str(c, 'metadata'), url: str(c, 'metadata-url') };
+            if (flag(c, 'dry-run')) {
+                return { dryRun: true, action: 'create', kind: 'SAML service provider', name, metadata: source.file ?? source.url };
+            }
+            const provider = await saml.createServiceProvider(c.nam(), name, source);
+            return { action: 'created', provider, next: 'Run amcli update --yes to apply it to the Identity Servers' };
+        },
+    },
+    {
+        name: 'saml delete', summary: 'Stop trusting SAML providers', args: '<name|id|entityID>...',
+        writes: true, confirm: true, options: { type: { type: 'string', description: 'sp or idp, when a name is used by both' }, ...YES, ...DRY },
+        run: async c => {
+            if (!c.positionals.length) {
+                throw usage('Give the SAML providers to delete');
+            }
+            needYes(c, `Deleting ${c.positionals.join(', ')}`);
+            const nam = c.nam();
+            const providers = [];
+            for (const ref of c.positionals) {
+                providers.push(await saml.findProvider(nam, ref, str(c, 'type') as saml.ProviderType | undefined));
+            }
+            if (flag(c, 'dry-run')) {
+                return { dryRun: true, action: 'delete', providers };
+            }
+            await saml.deleteProviders(nam, providers);
+            return { action: 'deleted', providers, next: 'Run amcli update --yes to apply it to the Identity Servers' };
+        },
+    },
+    { name: 'saml attribute-maps', summary: 'The shared SAML attribute maps', run: async c => saml.attributeMaps(c.nam()) },
+    {
+        name: 'report', summary: 'What uses what: contracts, methods, classes, user stores, SAML providers and Access Gateway resources, and what nothing refers to', args: '[<export>]',
+        options: {
+            ag: { type: 'boolean', description: 'Include Access Gateway protected resources, from a Code Promotion export the console makes and amcli deletes again' },
+            markdown: { type: 'string', description: 'Also write the report as Markdown tables to this file' },
+        },
+        run: async c => {
+            const [given, ...rest] = c.positionals;
+            if (rest.length) {
+                throw usage('report takes at most one export folder');
+            }
+            let folder = given;
+            let temporary: string | undefined;
+            if (!folder) {
+                temporary = fs.mkdtempSync(`${os.tmpdir()}/amcli-report-`);
+                fs.rmSync(temporary, { recursive: true, force: true });
+                folder = temporary;
+                progress('Exporting the console to report on it', c.quiet);
+                await runExport(c.nam(), { out: folder, apis: ['nps', 'amsvc'], runtime: false, afcFiles: false, revealSecrets: false, quiet: true });
+            }
+            try {
+                let ag: Map<string, string> | undefined;
+                if (flag(c, 'ag')) {
+                    progress('Reading the Access Gateway configuration through Code Promotion', c.quiet);
+                    ag = await accessGatewayConfigs(c.nam().client);
+                }
+                const report = buildReport(folder, ag);
+                const shown = temporary ? { ...report, source: 'the console now' } : report;
+                const markdown = str(c, 'markdown');
+                if (markdown) {
+                    fs.writeFileSync(markdown, toMarkdown(shown));
+                }
+                return markdown ? { ...shown, markdown } : shown;
+            } finally {
+                if (temporary) {
+                    fs.rmSync(temporary, { recursive: true, force: true });
+                }
+            }
+        },
+    },
+    {
         name: 'api ops', summary: 'List the console API\'s operations from its OpenAPI description',
         options: {
             tag: { type: 'string', description: 'Only operations with this tag (group)' },
@@ -592,7 +799,7 @@ export const GLOBAL_OPTIONS: Record<string, OptionSpec> = {
     help: { type: 'boolean', short: 'h', description: 'Help for the command' },
 };
 
-export const VERSION = '0.4.0';
+export const VERSION = '0.5.0';
 
 export function describe(): unknown {
     return {

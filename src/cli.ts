@@ -133,7 +133,8 @@ async function main(argv: string[]): Promise<number> {
             quiet: values.quiet === true,
         });
         print(result, { ...output, revealSecrets: output.revealSecrets || command.plain === true });
-        return 0;
+        // A command may set an exit code that isn't an error, such as diff --exit-code
+        return typeof process.exitCode === 'number' ? process.exitCode : 0;
     } finally {
         nam?.client.close();
     }

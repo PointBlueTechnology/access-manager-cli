@@ -2,6 +2,15 @@
 
 All notable changes to this project are listed here. Versions follow [Semantic Versioning](https://semver.org).
 
+## 0.5.0
+
+- `amcli diff`: compares two exports, or an export with the console now (`--live`). Lists are paired by ID or name, each console's address is normalized, and timestamps, pending-Update and health status and the generated parts of signed SAML metadata don't count. `--exit-code` exits 9 when they differ
+- `amcli report`: what uses what. Contracts with their methods and what uses them (SAML providers, identity providers' cards, Access Gateway protected resources), methods with their class and user stores, and what nothing refers to. `--ag` reads protected resources' contracts and policies from a Code Promotion export, which it deletes from the console afterwards. `--markdown` writes the tables to a file
+- `amcli saml`: list, get (with contracts by name), metadata, create-sp from metadata, delete, attribute-maps
+- `amcli certs`: list with days left and `--expired`, `--expiring`, `--trusted-roots` and `--fail`; get, with a trusted root's PEM. Read-only: the APIs can't list keystores or create trusted roots
+- `export` records answers that are a web page rather than data (as when a protocol is off) as skipped
+- Reads password-protected (ZipCrypto) zips and the console's XML without dependencies
+
 ## 0.4.0
 
 - `amcli export --out <folder>`: saves every configuration read the console's APIs offer, for backup and reference. It reads both the current API (/nps) and the older one (/amsvc/v1), which adds Access Gateway reverse proxies, proxy services and protected resources, policies, SAML providers and attribute maps, and certificates. Both describe themselves, so every read operation is found automatically, with IDs taken from the matching lists. Reads that change something, reach outside the console, return personal data or are binary are never made; runtime state only with `--runtime`. Also writes an `apply` file of each Identity Server cluster's classes, methods and contracts, and with `--afc-files` the files the Advanced File Configurator keeps. `manifest.json` lists every call, skip and failure. Secrets are blanked unless `--reveal-secrets`, which writes the folder readable by you alone and makes the apply files restorable

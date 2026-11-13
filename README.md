@@ -16,6 +16,10 @@ A command-line client for the OpenText Access Manager (NAM) Administration Conso
 - [Commands](#commands)
 - [Configuration files](#configuration-files)
 - [Exporting the configuration](#exporting-the-configuration)
+- [Comparing configurations](#comparing-configurations)
+- [What uses what](#what-uses-what)
+- [SAML providers](#saml-providers)
+- [Certificates](#certificates)
 - [For scripts and agents](#for-scripts-and-agents)
 - [Status](#status)
 - [Developing](#developing)
@@ -68,6 +72,10 @@ Run `amcli help` for the list, `amcli help <command>` for one command, and `amcl
 | `userstore list` / `get` | User stores |
 | `apply -f <file>` | Creates or updates everything in a configuration file; `--delete` removes it |
 | `export --out <folder>` | Saves all the configuration the console's APIs can read, for backup and reference; see [Exporting the configuration](#exporting-the-configuration) |
+| `diff <export> [<export>]` | Compares two exports, or an export with the console now (`--live`); see [Comparing configurations](#comparing-configurations) |
+| `report [<export>]` | What uses what: SAML providers and Access Gateway resources → contracts → methods → classes and user stores, and what nothing refers to; see [What uses what](#what-uses-what) |
+| `saml list` / `get` / `metadata` / `create-sp` / `delete` / `attribute-maps` | SAML 2 service and identity providers; see [SAML providers](#saml-providers) |
+| `certs list` / `get` | Certificates and trusted roots, with the days each has left; see [Certificates](#certificates) |
 | `afc list` / `upload` / `send` / `fetch` / `get` / `remove` / `untrack` | Files on the servers, through the Advanced File Configurator; see [Files on the servers](#files-on-the-servers) |
 | `api ops`, `api <METHOD> <path>` | Lists the console API's operations, or calls any of them |
 
@@ -168,10 +176,62 @@ amcli export --out backup-2026-11-13
 
 A full export of a test console with one Identity Server cluster took about 30 seconds and saved about 390 files.
 
+## Comparing configurations
+
+```bash
+amcli diff backup-monday backup-friday          # two exports
+amcli diff backup-monday --live --exit-code     # an export and the console now; exit 9 if they differ
+amcli diff test-export prod-export --only apply # two consoles' authentication setups, by name
+```
+
+`diff` pairs list items by their ID or name, so a reordered list isn't a change, and replaces each console's own address, so exports of different consoles compare. It leaves out what changes without anyone configuring anything: timestamps, whether an Update is waiting and server health (`--include-status` keeps those), and the document IDs and signatures the console puts in its own SAML metadata each time it's fetched. `--ignore <key>` leaves out more, `--summary` gives only counts and file names, and `--live --save <folder>` keeps the fresh export.
+
+The console gives objects new IDs in each environment, so between different consoles compare the `apply` files (`--only apply`), which use names.
+
+## What uses what
+
+```bash
+amcli report --ag --markdown usage.md
+```
+
+`report` shows, for each Identity Server cluster:
+
+- each contract's methods, in order, and what uses it: SAML service providers, identity providers offered as a card in it, and Access Gateway protected resources;
+- each method's class and user stores, and the contracts it's in; each class's methods;
+- each SAML provider's contracts;
+- each protected resource's proxy service, URL paths, contract and policies (with `--ag`);
+- what nothing refers to: classes with no methods, methods in no contract, and contracts no provider or resource uses. A contract can still be used directly by its URL or card ID, which no report can see.
+
+It works from an export folder (`amcli report <folder>`) or, without one, from a fresh export it deletes afterwards. Neither console API gives a protected resource's contract or policies, so `--ag` reads them from a Code Promotion export of the Access Gateway: the console makes it, amcli reads it and deletes it from the console straight away. `--markdown` also writes the tables to a file.
+
+## SAML providers
+
+| Command | Does |
+|---|---|
+| `saml list` | The SAML 2 service providers and identity providers the cluster trusts |
+| `saml get <name\|id\|entityID>` | One provider's settings, with the contracts it uses by name |
+| `saml metadata <provider> [-o file]` | Its metadata, as XML |
+| `saml create-sp --name <name> --metadata <file>` | Trusts a new service provider from its metadata (or `--metadata-url`) |
+| `saml delete <provider>... --yes` | Stops trusting providers |
+| `saml attribute-maps` | The shared attribute maps |
+
+Providers can be named by display name, console ID or entity ID. Changes reach the Identity Servers after `amcli update --yes`.
+
+## Certificates
+
+```bash
+amcli certs list --expiring 30 --fail   # for monitoring: exit 9 if any expire within 30 days
+amcli certs get my-trusted-root -o root.pem
+```
+
+`certs list` shows the console's keystore certificates and trusted roots, soonest to expire first, with the days each has left. `--expired`, `--expiring <days>` and `--trusted-roots` narrow it. `certs get` shows one, and saves a trusted root's PEM.
+
+The console's APIs can't list keystores or create trusted roots, so `certs` reads only. Importing and deleting certificates are left to the console for now.
+
 ## For scripts and agents
 
 - **One JSON document on stdout** for every result; progress messages go to stderr (`--quiet` stops them).
-- **Errors** are `{"error": {"code": ..., "message": ...}}` on stderr, with an exit code to match: 2 usage, 3 not found, 4 authentication, 5 rejected by the console, 6 connection, 7 timeout, 8 needs `--yes`.
+- **Errors** are `{"error": {"code": ..., "message": ...}}` on stderr, with an exit code to match: 2 usage, 3 not found, 4 authentication, 5 rejected by the console, 6 connection, 7 timeout, 8 needs `--yes`. Exit code 9 isn't an error: `diff --exit-code` and `certs list --fail` use it to say something was found.
 - **Self-describing:** `amcli describe` lists every command, option, setting and exit code as JSON.
 - **Secrets hidden:** passwords, keys, tokens and values such as a recovery pepper print as `<redacted>`, including in `api` output and dry-run plans. `--reveal-secrets` turns this off.
 - **Guarded:** deletes, `update` and raw `api` calls other than GET need `--yes`; every write takes `--dry-run`.
@@ -182,7 +242,7 @@ A full export of a test console with one Identity Server cluster took about 30 s
 
 | Area | |
 |---|---|
-| Tested on Access Manager 5.1.3 | Reading clusters, classes, methods, contracts and user stores; `apply` creating and deleting methods and contracts; `update --wait`; redaction of the Passkey class's recovery pepper; with a file added to an Identity Server: `afc upload --send --wait`, replacing it, `afc fetch`, editing and posting it back, `afc get`, `afc untrack` and `afc remove`; with a product JSP: editing it, sending it, and `afc remove` putting the original back; deploying a custom class's jar with `--restart` and `update --type afc`, which restarted the Identity Server onto it; `export` of both APIs, with secrets blanked and with `--reveal-secrets` |
+| Tested on Access Manager 5.1.3 | Reading clusters, classes, methods, contracts and user stores; `apply` creating and deleting methods and contracts; `update --wait`; redaction of the Passkey class's recovery pepper; with a file added to an Identity Server: `afc upload --send --wait`, replacing it, `afc fetch`, editing and posting it back, `afc get`, `afc untrack` and `afc remove`; with a product JSP: editing it, sending it, and `afc remove` putting the original back; deploying a custom class's jar with `--restart` and `update --type afc`, which restarted the Identity Server onto it; `export` of both APIs, with secrets blanked and with `--reveal-secrets`; `diff` of an export with the console, before and after a change; `report` with the Access Gateway; `saml` creating, reading and deleting a service provider; `certs` listing, expiry and a trusted root's PEM |
 | **Not yet** | Access Gateway and Administration Console files; creating user stores; clusters with more than one Identity Server; Access Manager 26.x |
 
 ## Developing

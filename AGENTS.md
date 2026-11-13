@@ -35,6 +35,12 @@
 
 `amcli export --out <new folder>` saves all readable configuration from both console APIs, with secrets blanked, plus an apply file per Identity Server cluster. Check `manifest.json` for what was skipped or failed. Use `--reveal-secrets` only when the user asks for a restorable backup, and tell them the folder then holds secrets.
 
+## Reports and comparisons
+
+- `amcli report --markdown <file>` answers "what uses this contract/method/class?" before you change or delete one. `--ag` adds Access Gateway resources; it makes a Code Promotion export on the console and deletes it again.
+- `amcli diff <export> --live --summary` shows what changed since an export.
+- `amcli certs list --expiring 30` lists certificates close to expiry.
+
 ## Anything else
 
 `amcli api ops --search <text>` finds console API operations, and `amcli api GET <path>` reads any of them. Raw writes (`amcli api POST|PUT|DELETE`) need `--yes`; prefer the dedicated commands, which check names and keep properties you didn't mention.

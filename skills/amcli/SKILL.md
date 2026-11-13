@@ -40,6 +40,12 @@ amcli class get Passkey1             # secrets show as <redacted>
 
 `amcli export --out <new folder>` saves everything both console APIs can read (secrets blanked), with `manifest.json` listing skips and failures. `--reveal-secrets` only if the user asks; the folder then holds secrets.
 
+## Reports
+
+- Before changing or deleting a contract, method or class: `amcli report --markdown <file>` shows what uses it (`--ag` adds Access Gateway resources).
+- `amcli diff <export> --live --summary` shows what changed since a backup.
+- `amcli certs list --expiring 30`; `amcli saml list` / `get` / `metadata`.
+
 ## Cleaning up
 
 `amcli apply -f file.json --delete --yes` removes what a file lists (contracts, then methods, then classes); then `amcli update --yes --wait`. Ask before deleting anything you didn't create.
