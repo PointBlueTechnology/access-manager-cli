@@ -8,6 +8,8 @@ import { CliError, usage } from './errors.ts';
  *
  *   AMCLI_URL            the Administration Console, e.g. https://ac.example.com:8443 (/nps is added)
  *   AMCLI_USER           console administrator (default: admin)
+ *   AMCLI_LEGACY_USER    its DN, for the older /amsvc/v1 API (default: AMCLI_USER if it's a DN,
+ *                        else cn=<AMCLI_USER>,o=novell)
  *   AMCLI_PASSWORD       its password, or
  *   AMCLI_PASSWORD_FILE  a file holding it
  *   AMCLI_CA_FILE        PEM file of the CA that signed the console's certificate
@@ -19,6 +21,8 @@ import { CliError, usage } from './errors.ts';
 export interface Config {
     baseUrl: string;
     user: string;
+    /** The administrator's DN, which the older /amsvc/v1 API wants */
+    legacyUser: string;
     password: string;
     ca?: string;
     tlsServerName?: string;
@@ -83,9 +87,11 @@ export function resolveConfig(flags: ConfigFlags): Config {
         throw new CliError('AUTH', 'Set AMCLI_PASSWORD or AMCLI_PASSWORD_FILE, or pass --password-stdin');
     }
     const timeout = Number(env.AMCLI_TIMEOUT_MS ?? 60000);
+    const user = flags.user ?? env.AMCLI_USER ?? 'admin';
     return {
         baseUrl: normalizeBaseUrl(url),
-        user: flags.user ?? env.AMCLI_USER ?? 'admin',
+        user,
+        legacyUser: env.AMCLI_LEGACY_USER || (user.includes('=') ? user : `cn=${user},o=novell`),
         password,
         ca: env.AMCLI_CA_FILE ? fs.readFileSync(env.AMCLI_CA_FILE, 'utf8') : undefined,
         tlsServerName: env.AMCLI_TLS_SERVERNAME || undefined,

@@ -36,6 +36,10 @@ amcli class get Passkey1             # secrets show as <redacted>
 - A jar needs `--restart`, then `--send --update --yes`: that restarts the Identity Servers, so ask first.
 - `amcli afc remove <path> --yes` deletes added files from the servers and restores product files; `afc untrack` only stops tracking. Ask first.
 
+## Backups
+
+`amcli export --out <new folder>` saves everything both console APIs can read (secrets blanked), with `manifest.json` listing skips and failures. `--reveal-secrets` only if the user asks; the folder then holds secrets.
+
 ## Cleaning up
 
 `amcli apply -f file.json --delete --yes` removes what a file lists (contracts, then methods, then classes); then `amcli update --yes --wait`. Ask before deleting anything you didn't create.

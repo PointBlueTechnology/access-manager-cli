@@ -2,6 +2,12 @@
 
 All notable changes to this project are listed here. Versions follow [Semantic Versioning](https://semver.org).
 
+## 0.4.0
+
+- `amcli export --out <folder>`: saves every configuration read the console's APIs offer, for backup and reference. It reads both the current API (/nps) and the older one (/amsvc/v1), which adds Access Gateway reverse proxies, proxy services and protected resources, policies, SAML providers and attribute maps, and certificates. Both describe themselves, so every read operation is found automatically, with IDs taken from the matching lists. Reads that change something, reach outside the console, return personal data or are binary are never made; runtime state only with `--runtime`. Also writes an `apply` file of each Identity Server cluster's classes, methods and contracts, and with `--afc-files` the files the Advanced File Configurator keeps. `manifest.json` lists every call, skip and failure. Secrets are blanked unless `--reveal-secrets`, which writes the folder readable by you alone and makes the apply files restorable
+- The older /amsvc/v1 API signs in with the administrator's DN: `AMCLI_LEGACY_USER`, by default `AMCLI_USER` if it's a DN, otherwise `cn=<AMCLI_USER>,o=novell`
+- Redaction no longer hides settings that only describe a secret, such as `tokenEndpoint`, `nidsTokenIssuer` or a password's minimum length
+
 ## 0.3.1
 
 - `afc send --update` and `afc upload --send --update` run the Update that makes the servers apply AFC files, restarting them for files marked `--restart` (such as a custom class's jar), and wait for it. Without it, `afc send` says when that Update is waiting

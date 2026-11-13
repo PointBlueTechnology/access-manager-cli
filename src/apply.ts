@@ -254,7 +254,7 @@ const FIELDS: Record<'class' | 'method' | 'contract', string[]> = {
 };
 
 /** The CLI's shape of an existing object, with names instead of IDs, as an apply file holds it. */
-async function specOf(nam: Nam, kind: Kind, raw: Raw): Promise<Raw> {
+export async function specOf(nam: Nam, kind: Kind, raw: Raw): Promise<Raw> {
     const view = kind === 'class' ? classView(raw) : kind === 'method' ? await methodView(raw, nam) : await contractView(raw, nam);
     const named = (value: unknown): unknown =>
         Array.isArray(value) ? value.map(named) : value && typeof value === 'object' && 'name' in value ? (value as Raw).name : value;
@@ -329,7 +329,7 @@ export class Backup {
     }
 }
 
-function propertiesOf(kind: Kind, raw: Raw): Properties {
+export function propertiesOf(kind: Kind, raw: Raw): Properties {
     if (kind === 'contract') {
         const out: Properties = {};
         for (const item of (raw.nidsAuthContractProperties as Raw[] | undefined) ?? []) {

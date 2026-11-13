@@ -45,9 +45,9 @@ export class Client {
     }
 
     /** Sends a request and returns the status and body whatever the status. */
-    async send(method: Method, path: string, body?: unknown): Promise<ApiResponse> {
+    async send(method: Method, path: string, body?: unknown, accept = 'application/json'): Promise<ApiResponse> {
         const payload = body === undefined ? undefined : Buffer.from(typeof body === 'string' ? body : JSON.stringify(body));
-        const response = await this.exchange(method, path, payload, 'application/json');
+        const response = await this.exchange(method, path, payload, 'application/json', accept);
         return { status: response.status, body: parse(response.data.toString('utf8')) };
     }
 
@@ -79,17 +79,21 @@ export class Client {
     }
 
     /**
-     * Paths under /roma/ go to the console's older REST API, next to /nps; it takes the same
-     * Basic authentication. Everything else is relative to /nps.
+     * Paths under /roma/ and /amsvc/ go to the console's older REST APIs, next to /nps, with the
+     * same password. Everything else is relative to /nps.
      */
     private url(path: string): string {
         const relative = path.startsWith('/') ? path : `/${path}`;
-        return relative.startsWith('/roma/') ? new URL(this.config.baseUrl).origin + relative : this.config.baseUrl + relative;
+        return relative.startsWith('/roma/') || relative.startsWith('/amsvc/')
+            ? new URL(this.config.baseUrl).origin + relative
+            : this.config.baseUrl + relative;
     }
 
     private exchange(method: Method, path: string, payload: Buffer | undefined, contentType: string, accept = 'application/json'): Promise<{ status: number; data: Buffer }> {
         const url = this.url(path);
-        const auth = Buffer.from(`${this.config.user}:${this.config.password}`).toString('base64');
+        // The older /amsvc/v1 API signs in with the administrator's DN rather than their short name
+        const user = path.startsWith('/amsvc/') ? this.config.legacyUser : this.config.user;
+        const auth = Buffer.from(`${user}:${this.config.password}`).toString('base64');
         const headers: Record<string, string> = { Accept: accept, Authorization: `Basic ${auth}` };
         if (payload !== undefined) {
             headers['Content-Type'] = contentType;

@@ -1,6 +1,7 @@
 import fs from 'node:fs';
 import * as afc from './afc.ts';
 import { Backup, execute, plan, readApplyFile } from './apply.ts';
+import { runExport } from './export.ts';
 import { CliError, usage } from './errors.ts';
 import { changes, classBody, classView, contractBody, contractView, methodBody, methodView } from './model.ts';
 import type { Properties, PropertyChange } from './model.ts';
@@ -492,6 +493,35 @@ export const COMMANDS: Command[] = [
         },
     },
     {
+        name: 'export', summary: 'Save every configuration read the console\'s APIs offer into a folder, for backup and reference',
+        options: {
+            out: { type: 'string', short: 'o', description: 'A new or empty folder to write into' },
+            api: { type: 'string', multiple: true, description: 'Which APIs: nps (the current one), amsvc (the older one, which adds Access Gateway, policies and SAML), or both (default)' },
+            runtime: { type: 'boolean', description: 'Also save runtime state: health, alerts, statistics, command logs' },
+            'afc-files': { type: 'boolean', description: 'Also save the files the Advanced File Configurator keeps' },
+        },
+        run: async c => {
+            const out = str(c, 'out');
+            if (!out) {
+                throw usage('export needs --out, a new or empty folder');
+            }
+            const apis = list(c, 'api');
+            for (const api of apis) {
+                if (api !== 'nps' && api !== 'amsvc') {
+                    throw usage(`--api is nps or amsvc, not ${api}`);
+                }
+            }
+            return runExport(c.nam(), {
+                out,
+                apis: (apis.length ? apis : ['nps', 'amsvc']) as ('nps' | 'amsvc')[],
+                runtime: flag(c, 'runtime'),
+                afcFiles: flag(c, 'afc-files'),
+                revealSecrets: flag(c, 'reveal-secrets'),
+                quiet: c.quiet,
+            });
+        },
+    },
+    {
         name: 'api ops', summary: 'List the console API\'s operations from its OpenAPI description',
         options: {
             tag: { type: 'string', description: 'Only operations with this tag (group)' },
@@ -562,7 +592,7 @@ export const GLOBAL_OPTIONS: Record<string, OptionSpec> = {
     help: { type: 'boolean', short: 'h', description: 'Help for the command' },
 };
 
-export const VERSION = '0.3.1';
+export const VERSION = '0.4.0';
 
 export function describe(): unknown {
     return {
@@ -574,6 +604,7 @@ export function describe(): unknown {
         settings: {
             AMCLI_URL: 'Administration Console URL, e.g. https://ac.example.com:8443',
             AMCLI_USER: 'Console administrator (default admin)',
+            AMCLI_LEGACY_USER: 'Its DN, for the older /amsvc/v1 API that export reads (default: AMCLI_USER if a DN, else cn=<AMCLI_USER>,o=novell)',
             AMCLI_PASSWORD: 'Its password (never accepted as a flag)',
             AMCLI_PASSWORD_FILE: 'File holding the password',
             AMCLI_CA_FILE: 'PEM CA for the console certificate',

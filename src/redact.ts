@@ -5,10 +5,15 @@
  * so settings like SIGNAL_PASSWORD_MANAGERS stay readable.
  */
 const SECRET_NAME = /pepper|passw|pwd|secret|token|credential|private.?key|api.?key|client.?key|salt|\bkey$/i;
+/**
+ * Names that describe a secret rather than hold one: where to get a token, its lifetime or type,
+ * a password's length rules, the name a secret is stored under
+ */
+const ABOUT_A_SECRET = /(url|uri|endpoint|issuer|type|ttl|lifetime|profile|visibility|option|length|name)$/i;
 
 export const REDACTED = '<redacted>';
 
-function harmless(value: unknown): boolean {
+export function harmless(value: unknown): boolean {
     if (typeof value === 'boolean' || typeof value === 'number' || value === null || value === undefined) {
         return true;
     }
@@ -16,7 +21,7 @@ function harmless(value: unknown): boolean {
 }
 
 export function isSecretName(name: string): boolean {
-    return SECRET_NAME.test(name);
+    return SECRET_NAME.test(name) && !ABOUT_A_SECRET.test(name);
 }
 
 export function redact<T>(value: T): T {

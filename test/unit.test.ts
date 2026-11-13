@@ -156,3 +156,24 @@ test('a backup undoes an apply exactly: old values back, added ones unset, creat
     await execute(nam(fake), backup.restore, await plan(nam(fake), backup.restore, false));
     assert.deepEqual(fake.store, before);
 });
+
+test('redact keeps settings that describe a secret, and still hides the secret itself', () => {
+    const out = redact({
+        tokenEndpoint: 'https://idp/token', nidsTokenIssuer: 'https://idp', forgotPasswordUserUrl: 'https://idp/fp',
+        securityTokenType: 'saml2', secretName: 'my-store', accessTokenTTL: '3600',
+        clientSecret: 'abc', nidsAdminPassword: 'pw', encryptionPasswordHashKey: 'k', RECOVERY_PEPPER: 'p',
+    });
+    assert.deepEqual(out, {
+        tokenEndpoint: 'https://idp/token', nidsTokenIssuer: 'https://idp', forgotPasswordUserUrl: 'https://idp/fp',
+        securityTokenType: 'saml2', secretName: 'my-store', accessTokenTTL: '3600',
+        clientSecret: REDACTED, nidsAdminPassword: REDACTED, encryptionPasswordHashKey: REDACTED, RECOVERY_PEPPER: REDACTED,
+    });
+});
+
+test('idsFrom takes IDs from the shallowest list that has them, and can filter', async () => {
+    const { idsFrom } = await import('../src/export.ts');
+    assert.deepEqual(idsFrom({ content: [{ id: 'A' }, { id: 'B' }] }, ['id']), ['A', 'B']);
+    assert.deepEqual(idsFrom({ assigned: [{ clusterId: 'C1', servers: [{ deviceId: 'D1' }] }] }, ['deviceId']), ['D1']);
+    assert.deepEqual(idsFrom({ list: { item: [{ uri: 'https://ac/amsvc/v1/things/T1' }] } }, ['x'], '/amsvc/v1/things'), ['T1']);
+    assert.deepEqual(idsFrom([{ id: 'ST1' }, { id: 'LT2' }], ['id'], undefined, item => String(item.id).startsWith('ST')), ['ST1']);
+});

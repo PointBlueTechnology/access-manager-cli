@@ -31,6 +31,10 @@
 - A jar (a custom class) only loads after a restart: upload it with `--restart`, then `--send --update` (or `amcli update --type afc --yes --wait`) restarts the Identity Servers. Confirm the user agreed to a restart on this system first.
 - `afc remove` deletes files you added from every server, and puts product files back to the original. `afc untrack` only makes AFC forget a file. Confirm with the user before either.
 
+## Backups
+
+`amcli export --out <new folder>` saves all readable configuration from both console APIs, with secrets blanked, plus an apply file per Identity Server cluster. Check `manifest.json` for what was skipped or failed. Use `--reveal-secrets` only when the user asks for a restorable backup, and tell them the folder then holds secrets.
+
 ## Anything else
 
 `amcli api ops --search <text>` finds console API operations, and `amcli api GET <path>` reads any of them. Raw writes (`amcli api POST|PUT|DELETE`) need `--yes`; prefer the dedicated commands, which check names and keep properties you didn't mention.

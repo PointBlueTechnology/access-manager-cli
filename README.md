@@ -15,6 +15,7 @@ A command-line client for the OpenText Access Manager (NAM) Administration Conso
 - [Connecting](#connecting)
 - [Commands](#commands)
 - [Configuration files](#configuration-files)
+- [Exporting the configuration](#exporting-the-configuration)
 - [For scripts and agents](#for-scripts-and-agents)
 - [Status](#status)
 - [Developing](#developing)
@@ -41,6 +42,7 @@ Settings come from environment variables, or from an env file given with `--env-
 |---|---|
 | `AMCLI_URL` | The Administration Console, for example `https://ac.example.com:8443` (`/nps` is added) |
 | `AMCLI_USER` | Console administrator (default `admin`) |
+| `AMCLI_LEGACY_USER` | Its DN, for the older `/amsvc/v1` API that `export` also reads (default: `AMCLI_USER` if it's a DN, otherwise `cn=<AMCLI_USER>,o=novell`) |
 | `AMCLI_PASSWORD` or `AMCLI_PASSWORD_FILE` | Its password, or a file holding it. `--password-stdin` reads it from stdin. It's never accepted as a flag, where it would show in process lists and shell history |
 | `AMCLI_CA_FILE` | PEM file of the CA that signed the console's certificate |
 | `AMCLI_TLS_SERVERNAME` | The name on the console's certificate, when `AMCLI_URL` uses an address |
@@ -65,6 +67,7 @@ Run `amcli help` for the list, `amcli help <command>` for one command, and `amcl
 | `class`, `method`, `contract` `list` / `get` / `create` / `update` / `delete` | Authentication classes, methods and contracts, by display name or ID |
 | `userstore list` / `get` | User stores |
 | `apply -f <file>` | Creates or updates everything in a configuration file; `--delete` removes it |
+| `export --out <folder>` | Saves all the configuration the console's APIs can read, for backup and reference; see [Exporting the configuration](#exporting-the-configuration) |
 | `afc list` / `upload` / `send` / `fetch` / `get` / `remove` / `untrack` | Files on the servers, through the Advanced File Configurator; see [Files on the servers](#files-on-the-servers) |
 | `api ops`, `api <METHOD> <path>` | Lists the console API's operations, or calls any of them |
 
@@ -142,6 +145,29 @@ Without `--update`, run `amcli update --type afc --yes --wait` when it suits you
 
 **One file at a time.** AFC can also upload whole folders, but several bugs have been reported with folder uploads, so `amcli` only uploads single files.
 
+## Exporting the configuration
+
+```bash
+amcli export --out backup-2026-11-13
+```
+
+`export` reads everything the console's APIs will give and saves it in a new folder. It uses both APIs: the current one (`/nps`), and the older one (`/amsvc/v1`), which adds Access Gateway reverse proxies, proxy services and protected resources, policies, SAML providers and attribute maps, and certificates. Both describe themselves, so `export` finds every read operation and fills in the IDs from the matching lists: each class from the class list, each protected resource from its proxy service, and so on.
+
+| In the folder | |
+|---|---|
+| `nps/…`, `amsvc/…` | One JSON file per read, laid out by its API path |
+| `apply/<cluster>.json` | Each Identity Server cluster's classes, methods and contracts, as a file `amcli apply` takes |
+| `afc/<cluster>/…` | With `--afc-files`: the files the Advanced File Configurator keeps |
+| `manifest.json` | Every call, and every read skipped or failed, with the reason |
+
+- **Never read:** operations that change something (a health refresh, a cache refresh), reach outside the console (update checks), return personal data (sessions, mobile users, LDAP groups) or return binaries.
+- **Runtime state:** health, alerts, statistics and command logs only with `--runtime`.
+- **Secrets:** blanked, as everywhere in amcli, so the folder is safe to share or keep in version control. The apply files then leave secrets out and merge, so applying one can't wipe a secret. `--reveal-secrets` keeps them, writes the folder readable by you alone, and makes the apply files restore everything exactly.
+- **Not in use:** features the console isn't licensed or set up for (API management, Account Management) are listed as skipped, not failed.
+- **Sign-in:** the older API wants the administrator's DN. amcli uses `AMCLI_USER` if it's a DN, otherwise `cn=<AMCLI_USER>,o=novell`; set `AMCLI_LEGACY_USER` if yours is elsewhere.
+
+A full export of a test console with one Identity Server cluster took about 30 seconds and saved about 390 files.
+
 ## For scripts and agents
 
 - **One JSON document on stdout** for every result; progress messages go to stderr (`--quiet` stops them).
@@ -156,7 +182,7 @@ Without `--update`, run `amcli update --type afc --yes --wait` when it suits you
 
 | Area | |
 |---|---|
-| Tested on Access Manager 5.1.3 | Reading clusters, classes, methods, contracts and user stores; `apply` creating and deleting methods and contracts; `update --wait`; redaction of the Passkey class's recovery pepper; with a file added to an Identity Server: `afc upload --send --wait`, replacing it, `afc fetch`, editing and posting it back, `afc get`, `afc untrack` and `afc remove`; with a product JSP: editing it, sending it, and `afc remove` putting the original back; deploying a custom class's jar with `--restart` and `update --type afc`, which restarted the Identity Server onto it |
+| Tested on Access Manager 5.1.3 | Reading clusters, classes, methods, contracts and user stores; `apply` creating and deleting methods and contracts; `update --wait`; redaction of the Passkey class's recovery pepper; with a file added to an Identity Server: `afc upload --send --wait`, replacing it, `afc fetch`, editing and posting it back, `afc get`, `afc untrack` and `afc remove`; with a product JSP: editing it, sending it, and `afc remove` putting the original back; deploying a custom class's jar with `--restart` and `update --type afc`, which restarted the Identity Server onto it; `export` of both APIs, with secrets blanked and with `--reveal-secrets` |
 | **Not yet** | Access Gateway and Administration Console files; creating user stores; clusters with more than one Identity Server; Access Manager 26.x |
 
 ## Developing
