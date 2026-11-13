@@ -2,6 +2,12 @@
 
 All notable changes to this project are listed here. Versions follow [Semantic Versioning](https://semver.org).
 
+## 0.3.1
+
+- `afc send --update` and `afc upload --send --update` run the Update that makes the servers apply AFC files, restarting them for files marked `--restart` (such as a custom class's jar), and wait for it. Without it, `afc send` says when that Update is waiting
+- Tested deploying a custom class's jar: `--restart`, then `update --type afc`, restarted the Identity Server onto it. `afc send --restart` alone doesn't restart
+- SECURITY.md; npm metadata (homepage, issues, keywords)
+
 ## 0.3.0
 
 - `apply --backup <file>` writes an apply file that undoes the run: changed settings go back to their old values, added ones are unset, created objects are removed and deleted ones come back. It's written 0600, since it can hold secrets, and refused if it already exists

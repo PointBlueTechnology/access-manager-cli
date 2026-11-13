@@ -118,7 +118,7 @@ The `afc` commands work with the console's Advanced File Configurator (AFC), whi
 |---|---|---|
 | `afc list` | The files AFC keeps for the cluster, and whether each reached every server | The file table |
 | `afc upload <file> --dir <folder>` | Saves a file in the console; replacing one keeps its description and settings unless you give new ones. `--send --yes` also sends it | Upload |
-| `afc send <path>... --yes [--wait]` | Copies saved files to the cluster's servers | Send Configurations to Servers |
+| `afc send <path>... --yes [--wait] [--update]` | Copies saved files to the cluster's servers. `--update` then runs the Update that makes the servers apply them, restarting for files that need it | Send Configurations to Servers |
 | `afc fetch <path> [-o file]` | Gets any file as a server has it now, tracked or not, to edit and post back with `afc upload`. `--version first` or `last` gets the copy AFC kept before it first or last changed the file | Download Configurations to Edit Offline |
 | `afc get <path> [-o file]` | Gets AFC's own saved copy | Downloading a saved file |
 | `afc remove <path>... --yes [--wait]` | Deletes files you added from every server; files that came with the product go back to their original version | Remove Configuration |
@@ -132,7 +132,13 @@ amcli afc fetch /opt/novell/nids/lib/webapp/jsp/nidp_latest.jsp -o nidp_latest.j
 amcli afc upload nidp_latest.jsp --dir /opt/novell/nids/lib/webapp/jsp --send --wait --yes
 ```
 
-To deploy a custom class, upload its jar and each JSP the same way, one file at a time. A jar needs an Identity Server restart before it loads: add `--restart` to the upload to mark it, and restart the servers when it suits you, or send with `amcli afc send <path> --restart --yes` to restart straight away.
+To deploy a custom class, upload its jar and each JSP the same way, one file at a time. A jar only loads after the Identity Server restarts, so mark it with `--restart`. Sending copies it to the servers, and the console then shows an Update waiting; that Update restarts them. `--update` runs it and waits:
+
+```bash
+amcli afc upload my-class.jar --dir /opt/novell/nids/lib/webapp/WEB-INF/lib --restart --send --update --yes
+```
+
+Without `--update`, run `amcli update --type afc --yes --wait` when it suits you. Sending with `--restart` alone (the console's "restart straight away") didn't restart anything in testing; the Update did.
 
 **One file at a time.** AFC can also upload whole folders, but several bugs have been reported with folder uploads, so `amcli` only uploads single files.
 
@@ -150,8 +156,8 @@ To deploy a custom class, upload its jar and each JSP the same way, one file at 
 
 | Area | |
 |---|---|
-| Tested on Access Manager 5.1.3 | Reading clusters, classes, methods, contracts and user stores; `apply` creating and deleting methods and contracts; `update --wait`; redaction of the Passkey class's recovery pepper; with a file added to an Identity Server: `afc upload --send --wait`, replacing it, `afc fetch`, editing and posting it back, `afc get`, `afc untrack` and `afc remove`; with a product JSP: editing it, sending it, and `afc remove` putting the original back |
-| **Not yet** | Uploading a jar with `--restart`; Access Gateway and Administration Console files; creating user stores; clusters with more than one Identity Server; Access Manager 26.x |
+| Tested on Access Manager 5.1.3 | Reading clusters, classes, methods, contracts and user stores; `apply` creating and deleting methods and contracts; `update --wait`; redaction of the Passkey class's recovery pepper; with a file added to an Identity Server: `afc upload --send --wait`, replacing it, `afc fetch`, editing and posting it back, `afc get`, `afc untrack` and `afc remove`; with a product JSP: editing it, sending it, and `afc remove` putting the original back; deploying a custom class's jar with `--restart` and `update --type afc`, which restarted the Identity Server onto it |
+| **Not yet** | Access Gateway and Administration Console files; creating user stores; clusters with more than one Identity Server; Access Manager 26.x |
 
 ## Developing
 

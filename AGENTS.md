@@ -28,6 +28,7 @@
 
 - `amcli afc fetch <path> -o <file>` gets a file as the server has it; edit it, then `amcli afc upload <file> --dir <folder> --send --wait --yes` posts it back to every server.
 - Upload single files, never folders.
+- A jar (a custom class) only loads after a restart: upload it with `--restart`, then `--send --update` (or `amcli update --type afc --yes --wait`) restarts the Identity Servers. Confirm the user agreed to a restart on this system first.
 - `afc remove` deletes files you added from every server, and puts product files back to the original. `afc untrack` only makes AFC forget a file. Confirm with the user before either.
 
 ## Anything else

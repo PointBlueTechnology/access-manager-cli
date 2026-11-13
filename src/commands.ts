@@ -221,6 +221,18 @@ function plural(label: string): string {
     return label.endsWith("s") ? `${label}es` : `${label}s`;
 }
 
+/** After sending: the servers pick up AFC files (and restart for --restart ones) only with an Update. */
+async function afterSend(c: Context, result: Record<string, unknown>): Promise<Record<string, unknown>> {
+    const nam = c.nam();
+    if (flag(c, 'update')) {
+        return { ...result, update: await runUpdate(nam, { types: ['afc'], wait: true, timeoutSec: int(c, 'timeout') ?? 600, quiet: c.quiet }) };
+    }
+    const status = await nam.clusterStatus();
+    return status.pending?.afc
+        ? { ...result, next: 'The servers apply these files, and restart for files that need it, only with an Update: amcli update --type afc --yes --wait' }
+        : result;
+}
+
 function article(label: string): string {
     return /^[aeiou]/i.test(label) ? 'an' : 'a';
 }
@@ -319,6 +331,7 @@ export const COMMANDS: Command[] = [
             restart: { type: 'boolean', description: 'Mark the file as needing a server restart' },
             send: { type: 'boolean', description: 'Then send it to the servers (needs --yes)' },
             wait: { type: 'boolean', description: 'With --send, wait until every server has it' },
+            update: { type: 'boolean', description: 'With --send, then run the Update that applies AFC files, restarting the servers for files that need it, and wait for it' },
             ...YES, ...DRY,
         },
         run: async c => {
@@ -340,17 +353,18 @@ export const COMMANDS: Command[] = [
             if (!flag(c, 'send')) {
                 return { action: replaces ? 'replaced' : 'uploaded', file: uploaded, next: `Run amcli afc send ${uploaded.fullName} --yes to copy it to the servers` };
             }
-            const [sent] = await afc.send(nam, [uploaded.fullName], { restart: false, wait: flag(c, 'wait'), timeoutSec: 300, quiet: c.quiet });
-            return { action: replaces ? 'replaced and sent' : 'uploaded and sent', file: sent };
+            const [sent] = await afc.send(nam, [uploaded.fullName], { restart: false, wait: flag(c, 'wait') || flag(c, 'update'), timeoutSec: 300, quiet: c.quiet });
+            return afterSend(c, { action: replaces ? 'replaced and sent' : 'uploaded and sent', file: sent });
         },
     },
     {
         name: 'afc send', summary: 'Send Advanced File Configurator files to the cluster\'s servers', args: '<path>...',
         writes: true, confirm: true,
         options: {
-            restart: { type: 'boolean', description: 'Restart the servers straight away if a file needs it' },
+            restart: { type: 'boolean', description: 'The console\'s "restart straight away"; the restart itself still comes with the Update (see --update)' },
             wait: { type: 'boolean', description: 'Wait until every server has the files' },
-            timeout: { type: 'string', description: 'Seconds to wait with --wait (default 300)' },
+            update: { type: 'boolean', description: 'Then run the Update that applies AFC files, restarting the servers for files that need it, and wait for it' },
+            timeout: { type: 'string', description: 'Seconds to wait with --wait (default 300) or --update (default 600)' },
             ...YES, ...DRY,
         },
         run: async c => {
@@ -361,7 +375,8 @@ export const COMMANDS: Command[] = [
             if (flag(c, 'dry-run')) {
                 return { dryRun: true, action: 'send', files: c.positionals, restart: flag(c, 'restart') };
             }
-            return { action: 'sent', files: await afc.send(c.nam(), c.positionals, { restart: flag(c, 'restart'), wait: flag(c, 'wait'), timeoutSec: int(c, 'timeout') ?? 300, quiet: c.quiet }) };
+            const files = await afc.send(c.nam(), c.positionals, { restart: flag(c, 'restart'), wait: flag(c, 'wait') || flag(c, 'update'), timeoutSec: int(c, 'timeout') ?? 300, quiet: c.quiet });
+            return afterSend(c, { action: 'sent', files });
         },
     },
     {
@@ -547,7 +562,7 @@ export const GLOBAL_OPTIONS: Record<string, OptionSpec> = {
     help: { type: 'boolean', short: 'h', description: 'Help for the command' },
 };
 
-export const VERSION = '0.3.0';
+export const VERSION = '0.3.1';
 
 export function describe(): unknown {
     return {

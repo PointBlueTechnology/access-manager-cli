@@ -33,6 +33,7 @@ amcli class get Passkey1             # secrets show as <redacted>
 - `amcli afc list` shows the files the Advanced File Configurator keeps.
 - To change a server file: `amcli afc fetch <path> -o <file>`, edit, then `amcli afc upload <file> --dir <folder> --send --wait --yes`.
 - One file at a time; never folders.
+- A jar needs `--restart`, then `--send --update --yes`: that restarts the Identity Servers, so ask first.
 - `amcli afc remove <path> --yes` deletes added files from the servers and restores product files; `afc untrack` only stops tracking. Ask first.
 
 ## Cleaning up
