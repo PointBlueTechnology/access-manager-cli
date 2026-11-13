@@ -141,8 +141,8 @@ To deploy a custom class, upload its jar and each JSP the same way, one file at 
 
 | Area | |
 |---|---|
-| Tested on Access Manager 5.1.3 | Reading clusters, classes, methods, contracts and user stores; `apply` creating and deleting methods and contracts; `update --wait`; redaction of the Passkey class's recovery pepper; with a file added to an Identity Server: `afc upload --send --wait`, replacing it, `afc fetch`, editing and posting it back, `afc get`, `afc untrack` and `afc remove` |
-| **Not yet** | `afc remove` on a file that came with the product (it should go back to the original); uploading a jar with `--restart`; Access Gateway and Administration Console files; creating user stores; clusters with more than one Identity Server; Access Manager 26.x |
+| Tested on Access Manager 5.1.3 | Reading clusters, classes, methods, contracts and user stores; `apply` creating and deleting methods and contracts; `update --wait`; redaction of the Passkey class's recovery pepper; with a file added to an Identity Server: `afc upload --send --wait`, replacing it, `afc fetch`, editing and posting it back, `afc get`, `afc untrack` and `afc remove`; with a product JSP: editing it, sending it, and `afc remove` putting the original back |
+| **Not yet** | Uploading a jar with `--restart`; Access Gateway and Administration Console files; creating user stores; clusters with more than one Identity Server; Access Manager 26.x |
 
 ## Developing
 

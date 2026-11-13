@@ -86,6 +86,15 @@ function contentTypeFor(name: string): string {
     return ({ '.jar': 'application/java-archive', '.jsp': 'text/plain', '.jspf': 'text/plain', '.properties': 'text/plain', '.xml': 'text/xml', '.ldif': 'text/ldif', '.css': 'text/css', '.js': 'text/javascript', '.png': 'image/png', '.svg': 'image/svg+xml' } as Record<string, string>)[extension] ?? 'application/octet-stream';
 }
 
+/** Whether a file came with Access Manager (the console then keeps its original to go back to). */
+export async function isProductFile(nam: Nam, clusterId: string, fullName: string): Promise<boolean> {
+    const answer = (await nam.client.request('POST', `/roma/rest/customfiles/getFileDetails/${DEVICE}/${encodeURIComponent(clusterId)}`, { fullName, deviceType: DEVICE, fileType: true })) as Raw;
+    if (typeof answer?.defaultFile !== 'boolean') {
+        throw new CliError('ERROR', `The console didn't say whether ${fullName} is a product file`, { details: answer });
+    }
+    return answer.defaultFile;
+}
+
 /** The upload's description, as the console's page builds it. */
 export async function uploadDetails(nam: Nam, localFile: string, options: UploadOptions): Promise<Raw> {
     if (!options.dir.startsWith('/')) {
@@ -100,7 +109,9 @@ export async function uploadDetails(nam: Nam, localFile: string, options: Upload
     return {
         clusterID: cluster.id,
         clusterName: cluster.name,
-        defaultFile: existing?.defaultFile ?? false,
+        // Whether the file came with the product decides what afc remove does with it later:
+        // restore the original, or delete the file. The console's page asks the same question.
+        defaultFile: await isProductFile(nam, cluster.id, `${dir}${name}`),
         description: options.description ?? existing?.description ?? '',
         deviceType: DEVICE,
         fileType: true,
@@ -179,7 +190,14 @@ export async function remove(nam: Nam, names: string[], options: { restart: bool
     for (const name of names) {
         files.push(await findFile(nam, name));
     }
-    await nam.client.request('POST', `/roma/rest/customfiles/files/device?op=delete&deviceType=${DEVICE}&immrestart=${options.restart}`, identifiers(files));
+    // defaultFile tells the servers to put a product file back rather than delete it, as the
+    // console's own Remove Configuration sends; without it they delete product files too
+    // AFC's own record can be wrong (an upload that didn't say), so the console is asked as well
+    const body = [];
+    for (const file of files) {
+        body.push({ ...identifiers([file])[0], defaultFile: file.defaultFile === true || (await isProductFile(nam, file.clusterId, file.fullName)) });
+    }
+    await nam.client.request('POST', `/roma/rest/customfiles/files/device?op=delete&deviceType=${DEVICE}&immrestart=${options.restart}`, body);
     progress(`Removing ${files.map(file => file.fullName).join(', ')}`, options.quiet);
     if (!options.wait) {
         return files;

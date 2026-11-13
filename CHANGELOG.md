@@ -5,6 +5,7 @@ All notable changes to this project are listed here. Versions follow [Semantic V
 ## 0.2.0
 
 - `afc` commands for the Advanced File Configurator, on Identity Server clusters: `list`, `upload` (one file at a time; replacing keeps the file's description and settings), `send` with `--wait`, `fetch` (any file from a server, current or the first or last copy AFC kept), `get` (AFC's saved copy), `remove` (deletes added files from the servers, puts product files back to the original) and `untrack`
+- `afc upload` asks the console whether a file came with the product and records it that way, and `afc remove` sends that, so product files are put back rather than deleted
 - Requests under `/roma/` go to the console's older REST API, with the same credentials
 
 ## 0.1.0
