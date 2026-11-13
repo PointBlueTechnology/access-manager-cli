@@ -3,7 +3,7 @@ import { parseArgs } from 'node:util';
 import { Client } from './client.ts';
 import { COMMANDS, GLOBAL_OPTIONS, VERSION } from './commands.ts';
 import type { Command, OptionSpec } from './commands.ts';
-import { resolveConfig } from './config.ts';
+import { loadEnvFile, resolveConfig } from './config.ts';
 import { CliError, usage } from './errors.ts';
 import { Nam } from './nam.ts';
 import { print, printError } from './output.ts';
@@ -105,6 +105,10 @@ async function main(argv: string[]): Promise<number> {
     if (values.help) {
         process.stdout.write(help(command) + '\n');
         return 0;
+    }
+    // Load the env file before anything reads the environment, such as ${env:...} in apply files
+    if (!command.offline) {
+        loadEnvFile(values['env-file'] as string | undefined);
     }
     const output = { revealSecrets: values['reveal-secrets'] === true, compact: values.compact === true };
     let nam: Nam | undefined;

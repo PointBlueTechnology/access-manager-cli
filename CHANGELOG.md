@@ -6,6 +6,7 @@ All notable changes to this project are listed here. Versions follow [Semantic V
 
 - `afc send --update` and `afc upload --send --update` run the Update that makes the servers apply AFC files, restarting them for files marked `--restart` (such as a custom class's jar), and wait for it. Without it, `afc send` says when that Update is waiting
 - Tested deploying a custom class's jar: `--restart`, then `update --type afc`, restarted the Identity Server onto it. `afc send --restart` alone doesn't restart
+- `--env-file` (or `AMCLI_ENV_FILE`) is loaded before an apply file is read, so `${env:NAME}` in the file can use values from it
 - SECURITY.md; npm metadata (homepage, issues, keywords)
 
 ## 0.3.0
