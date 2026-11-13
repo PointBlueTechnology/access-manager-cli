@@ -45,23 +45,61 @@ export class Client {
     }
 
     /** Sends a request and returns the status and body whatever the status. */
-    send(method: Method, path: string, body?: unknown): Promise<ApiResponse> {
-        const url = this.config.baseUrl + (path.startsWith('/') ? path : `/${path}`);
-        const payload = body === undefined ? undefined : typeof body === 'string' ? body : JSON.stringify(body);
+    async send(method: Method, path: string, body?: unknown): Promise<ApiResponse> {
+        const payload = body === undefined ? undefined : Buffer.from(typeof body === 'string' ? body : JSON.stringify(body));
+        const response = await this.exchange(method, path, payload, 'application/json');
+        return { status: response.status, body: parse(response.data.toString('utf8')) };
+    }
+
+    /** Uploads a multipart form, as the Advanced File Configurator page does. */
+    async upload(path: string, fields: Record<string, string>, file: { field: string; name: string; type: string; content: Buffer }): Promise<unknown> {
+        const boundary = `----amcli${Date.now().toString(16)}${Math.random().toString(16).slice(2)}`;
+        const parts: Buffer[] = [];
+        for (const [name, value] of Object.entries(fields)) {
+            parts.push(Buffer.from(`--${boundary}\r\nContent-Disposition: form-data; name="${name}"\r\n\r\n${value}\r\n`));
+        }
+        parts.push(Buffer.from(`--${boundary}\r\nContent-Disposition: form-data; name="${file.field}"; filename="${file.name.replace(/"/g, '')}"\r\nContent-Type: ${file.type}\r\n\r\n`));
+        parts.push(file.content, Buffer.from(`\r\n--${boundary}--\r\n`));
+        const response = await this.exchange('POST', path, Buffer.concat(parts), `multipart/form-data; boundary=${boundary}`);
+        const body = parse(response.data.toString('utf8'));
+        if (response.status >= 200 && response.status < 300) {
+            return body;
+        }
+        throw failure('POST', path, { status: response.status, body });
+    }
+
+    /** A request whose answer is a file: returns its bytes. */
+    async download(method: Method, path: string, body?: unknown): Promise<Buffer> {
+        const payload = body === undefined ? undefined : Buffer.from(JSON.stringify(body));
+        const response = await this.exchange(method, path, payload, 'application/json', '*/*');
+        if (response.status >= 200 && response.status < 300) {
+            return response.data;
+        }
+        throw failure(method, path, { status: response.status, body: parse(response.data.toString('utf8')) });
+    }
+
+    /**
+     * Paths under /roma/ go to the console's older REST API, next to /nps; it takes the same
+     * Basic authentication. Everything else is relative to /nps.
+     */
+    private url(path: string): string {
+        const relative = path.startsWith('/') ? path : `/${path}`;
+        return relative.startsWith('/roma/') ? new URL(this.config.baseUrl).origin + relative : this.config.baseUrl + relative;
+    }
+
+    private exchange(method: Method, path: string, payload: Buffer | undefined, contentType: string, accept = 'application/json'): Promise<{ status: number; data: Buffer }> {
+        const url = this.url(path);
         const auth = Buffer.from(`${this.config.user}:${this.config.password}`).toString('base64');
-        const headers: Record<string, string> = { Accept: 'application/json', Authorization: `Basic ${auth}` };
+        const headers: Record<string, string> = { Accept: accept, Authorization: `Basic ${auth}` };
         if (payload !== undefined) {
-            headers['Content-Type'] = 'application/json';
-            headers['Content-Length'] = String(Buffer.byteLength(payload));
+            headers['Content-Type'] = contentType;
+            headers['Content-Length'] = String(payload.length);
         }
         return new Promise((resolve, reject) => {
             const request = https.request(url, { method, headers, agent: this.agent, timeout: this.config.timeoutMs }, response => {
                 const chunks: Buffer[] = [];
                 response.on('data', chunk => chunks.push(chunk));
-                response.on('end', () => {
-                    const text = Buffer.concat(chunks).toString('utf8');
-                    resolve({ status: response.statusCode ?? 0, body: parse(text) });
-                });
+                response.on('end', () => resolve({ status: response.statusCode ?? 0, data: Buffer.concat(chunks) }));
             });
             request.on('timeout', () => {
                 request.destroy(new CliError('TIMEOUT', `No answer from ${url} within ${this.config.timeoutMs} ms`));

@@ -97,3 +97,22 @@ test('apply updates only what differs, and --delete removes contracts before met
     assert.equal(fake.store.methods.length, 0);
     assert.equal(fake.store.classes.length, 1);
 });
+
+test('extract takes one file out of the console\'s .tar.gz download', async () => {
+    const { execFileSync } = await import('node:child_process');
+    const fs = await import('node:fs');
+    const os = await import('node:os');
+    const path = await import('node:path');
+    const { extract } = await import('../src/afc.ts');
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'amcli-'));
+    const target = path.join(dir, 'customfiles/opt/novell/nids/lib/webapp/jsp');
+    fs.mkdirSync(target, { recursive: true });
+    fs.writeFileSync(path.join(target, 'login.jsp'), 'hello\n');
+    fs.writeFileSync(path.join(dir, 'customfiles/filesSucceeded'), '/opt/novell/nids/lib/webapp/jsp/login.jsp\n');
+    const archive = path.join(dir, 'files.tar.gz');
+    execFileSync('tar', ['-czf', archive, '-C', dir, 'customfiles']);
+    assert.equal(extract(fs.readFileSync(archive), '/opt/novell/nids/lib/webapp/jsp/login.jsp').toString(), 'hello\n');
+    assert.throws(() => extract(fs.readFileSync(archive), '/opt/other.jsp'), /didn't contain/);
+    assert.equal(extract(Buffer.from('plain'), '/x').toString(), 'plain');
+    fs.rmSync(dir, { recursive: true, force: true });
+});

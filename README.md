@@ -63,6 +63,7 @@ Run `amcli help` for the list, `amcli help <command>` for one command, and `amcl
 | `class`, `method`, `contract` `list` / `get` / `create` / `update` / `delete` | Authentication classes, methods and contracts, by display name or ID |
 | `userstore list` / `get` | User stores |
 | `apply -f <file>` | Creates or updates everything in a configuration file; `--delete` removes it |
+| `afc list` / `upload` / `send` / `fetch` / `get` / `remove` / `untrack` | Files on the servers, through the Advanced File Configurator; see [Files on the servers](#files-on-the-servers) |
 | `api ops`, `api <METHOD> <path>` | Lists the console API's operations, or calls any of them |
 
 Changes to classes, methods and contracts are saved in the console but reach the Identity Servers only when you run `amcli update --yes`, as in the console.
@@ -100,6 +101,32 @@ This suits test setups: apply a file, run `amcli update --yes --wait`, test, the
 
 Contract fields: `name`, `uri`, `methods`, `cardId` (default: the name), `cardText`, `image` (default `AAFIDOU2F`), `timeout` (minutes, default 60), `trustLevel`, `allowProxying` and `properties`. Method fields: `name`, `class`, `userStores`, `identifiesUser` (default true), `overwriteRealUser`, `overwriteTempUser` and `properties`. Class fields: `name`, `javaClass`, `typeId` and `properties`.
 
+## Files on the servers
+
+The `afc` commands work with the console's Advanced File Configurator (AFC), which keeps copies of files such as a custom authentication class's jar and JSPs, and sends them to every Identity Server in the cluster, including servers added later.
+
+| Command | Does | Console equivalent |
+|---|---|---|
+| `afc list` | The files AFC keeps for the cluster, and whether each reached every server | The file table |
+| `afc upload <file> --dir <folder>` | Saves a file in the console; replacing one keeps its description and settings unless you give new ones. `--send --yes` also sends it | Upload |
+| `afc send <path>... --yes [--wait]` | Copies saved files to the cluster's servers | Send Configurations to Servers |
+| `afc fetch <path> [-o file]` | Gets any file as a server has it now, tracked or not, to edit and post back with `afc upload`. `--version first` or `last` gets the copy AFC kept before it first or last changed the file | Download Configurations to Edit Offline |
+| `afc get <path> [-o file]` | Gets AFC's own saved copy | Downloading a saved file |
+| `afc remove <path>... --yes [--wait]` | Deletes files you added from every server; files that came with the product go back to their original version | Remove Configuration |
+| `afc untrack <path>... --yes` | AFC stops managing the files, and the servers keep their copies | Untrack Configurations |
+
+To change a file that came with Access Manager:
+
+```bash
+amcli afc fetch /opt/novell/nids/lib/webapp/jsp/nidp_latest.jsp -o nidp_latest.jsp
+# edit nidp_latest.jsp
+amcli afc upload nidp_latest.jsp --dir /opt/novell/nids/lib/webapp/jsp --send --wait --yes
+```
+
+To deploy a custom class, upload its jar and each JSP the same way, one file at a time. A jar needs an Identity Server restart before it loads: add `--restart` to the upload to mark it, and restart the servers when it suits you, or send with `amcli afc send <path> --restart --yes` to restart straight away.
+
+**One file at a time.** AFC can also upload whole folders, but several bugs have been reported with folder uploads, so `amcli` only uploads single files.
+
 ## For scripts and agents
 
 - **One JSON document on stdout** for every result; progress messages go to stderr (`--quiet` stops them).
@@ -114,8 +141,8 @@ Contract fields: `name`, `uri`, `methods`, `cardId` (default: the name), `cardTe
 
 | Area | |
 |---|---|
-| Tested on Access Manager 5.1.3 | Reading clusters, classes, methods, contracts and user stores; `apply` creating and deleting methods and contracts; `update --wait`; redaction of the Passkey class's recovery pepper |
-| **Not yet** | Uploading files through the Advanced File Configurator (for deploying custom classes and JSPs); creating user stores; Access Gateway clusters; clusters with more than one Identity Server; Access Manager 26.x |
+| Tested on Access Manager 5.1.3 | Reading clusters, classes, methods, contracts and user stores; `apply` creating and deleting methods and contracts; `update --wait`; redaction of the Passkey class's recovery pepper; with a file added to an Identity Server: `afc upload --send --wait`, replacing it, `afc fetch`, editing and posting it back, `afc get`, `afc untrack` and `afc remove` |
+| **Not yet** | `afc remove` on a file that came with the product (it should go back to the original); uploading a jar with `--restart`; Access Gateway and Administration Console files; creating user stores; clusters with more than one Identity Server; Access Manager 26.x |
 
 ## Developing
 

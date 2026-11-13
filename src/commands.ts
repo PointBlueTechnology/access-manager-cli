@@ -1,4 +1,5 @@
 import fs from 'node:fs';
+import * as afc from './afc.ts';
 import { execute, plan, readApplyFile } from './apply.ts';
 import { CliError, usage } from './errors.ts';
 import { changes, classBody, classView, contractBody, contractView, methodBody, methodView } from './model.ts';
@@ -306,6 +307,136 @@ export const COMMANDS: Command[] = [
         const ref = one(c, 'user store');
         return c.nam().getRaw('userstore', ref);
     } },
+    { name: 'afc list', summary: 'Files the Advanced File Configurator keeps for the cluster, and whether each reached the servers', run: async c => afc.listFiles(c.nam()) },
+    {
+        name: 'afc upload', summary: 'Upload a file to the Advanced File Configurator (saved in the console; afc send copies it to the servers)', args: '<local-file>',
+        writes: true,
+        options: {
+            dir: { type: 'string', description: 'Folder on the servers, e.g. /opt/novell/nids/lib/webapp/jsp' },
+            name: { type: 'string', description: 'File name on the servers (default: the local name)' },
+            description: { type: 'string', description: 'Description shown in the console' },
+            type: { type: 'string', multiple: true, description: 'Modification type shown in the console, e.g. Localization (repeatable)' },
+            restart: { type: 'boolean', description: 'Mark the file as needing a server restart' },
+            send: { type: 'boolean', description: 'Then send it to the servers (needs --yes)' },
+            wait: { type: 'boolean', description: 'With --send, wait until every server has it' },
+            ...YES, ...DRY,
+        },
+        run: async c => {
+            const local = one(c, 'local file');
+            const dir = str(c, 'dir');
+            if (!dir) {
+                throw usage('afc upload needs --dir, the folder on the servers');
+            }
+            if (flag(c, 'send')) {
+                needYes(c, 'Sending files to the Identity Servers');
+            }
+            const nam = c.nam();
+            const details = await afc.uploadDetails(nam, local, { dir, name: str(c, 'name'), description: str(c, 'description'), types: list(c, 'type'), restart: flag(c, 'restart') || undefined });
+            const replaces = (await afc.listFiles(nam)).some(file => file.fullName === `${details.path}${details.name}`);
+            if (flag(c, 'dry-run')) {
+                return { dryRun: true, action: replaces ? 'replace' : 'upload', fileDetails: details, send: flag(c, 'send') };
+            }
+            const uploaded = await afc.upload(nam, local, details);
+            if (!flag(c, 'send')) {
+                return { action: replaces ? 'replaced' : 'uploaded', file: uploaded, next: `Run amcli afc send ${uploaded.fullName} --yes to copy it to the servers` };
+            }
+            const [sent] = await afc.send(nam, [uploaded.fullName], { restart: false, wait: flag(c, 'wait'), timeoutSec: 300, quiet: c.quiet });
+            return { action: replaces ? 'replaced and sent' : 'uploaded and sent', file: sent };
+        },
+    },
+    {
+        name: 'afc send', summary: 'Send Advanced File Configurator files to the cluster\'s servers', args: '<path>...',
+        writes: true, confirm: true,
+        options: {
+            restart: { type: 'boolean', description: 'Restart the servers straight away if a file needs it' },
+            wait: { type: 'boolean', description: 'Wait until every server has the files' },
+            timeout: { type: 'string', description: 'Seconds to wait with --wait (default 300)' },
+            ...YES, ...DRY,
+        },
+        run: async c => {
+            if (!c.positionals.length) {
+                throw usage('Give the files to send, by full path on the servers');
+            }
+            needYes(c, 'Sending files to the Identity Servers');
+            if (flag(c, 'dry-run')) {
+                return { dryRun: true, action: 'send', files: c.positionals, restart: flag(c, 'restart') };
+            }
+            return { action: 'sent', files: await afc.send(c.nam(), c.positionals, { restart: flag(c, 'restart'), wait: flag(c, 'wait'), timeoutSec: int(c, 'timeout') ?? 300, quiet: c.quiet }) };
+        },
+    },
+    {
+        name: 'afc get', summary: 'Download a file the Advanced File Configurator keeps', args: '<path>',
+        options: { output: { type: 'string', short: 'o', description: 'Where to save it (default: print it, if it\'s text)' } },
+        run: async c => {
+            const name = one(c, 'file');
+            const { file, content } = await afc.download(c.nam(), name);
+            const output = str(c, 'output');
+            if (output) {
+                fs.writeFileSync(output, content);
+                return { saved: output, bytes: content.length, file: file.fullName };
+            }
+            if (content.includes(0)) {
+                throw usage(`${file.fullName} is binary; save it with --output`);
+            }
+            return { file: file.fullName, bytes: content.length, content: content.toString('utf8') };
+        },
+    },
+    {
+        name: 'afc fetch', summary: 'Fetch a file straight from a server, any file, tracked or not, to edit and post back with afc upload', args: '<path>',
+        options: {
+            output: { type: 'string', short: 'o', description: 'Where to save it (default: print it, if it\'s text)' },
+            version: { type: 'string', description: 'current (default), or first or last: the copy kept before AFC first or last changed it' },
+            server: { type: 'string', description: 'Which server, by IP or device ID (default: the cluster\'s first)' },
+        },
+        run: async c => {
+            const name = one(c, 'file');
+            const { server, content } = await afc.fetchFromServer(c.nam(), name, { version: str(c, 'version') ?? 'current', server: str(c, 'server') });
+            const output = str(c, 'output');
+            if (output) {
+                fs.writeFileSync(output, content);
+                return { saved: output, bytes: content.length, file: name, server, next: `After editing: amcli afc upload ${output} --dir ${name.slice(0, name.lastIndexOf('/'))}${output.endsWith(name.slice(name.lastIndexOf('/') + 1)) ? '' : ` --name ${name.slice(name.lastIndexOf('/') + 1)}`} --send --yes` };
+            }
+            if (content.includes(0)) {
+                throw usage(`${name} is binary; save it with --output`);
+            }
+            return { file: name, server, bytes: content.length, content: content.toString('utf8') };
+        },
+    },
+    {
+        name: 'afc remove', summary: 'Remove files from the servers too: custom files are deleted, product files go back to their original version (the console\'s Remove Configuration)', args: '<path>...',
+        writes: true, confirm: true,
+        options: {
+            restart: { type: 'boolean', description: 'Restart the servers straight away if a file needs it' },
+            wait: { type: 'boolean', description: 'Wait until the console has removed them' },
+            timeout: { type: 'string', description: 'Seconds to wait with --wait (default 300)' },
+            ...YES, ...DRY,
+        },
+        run: async c => {
+            if (!c.positionals.length) {
+                throw usage('Give the files to remove, by full path on the servers');
+            }
+            needYes(c, `Removing ${c.positionals.join(', ')} from the servers`);
+            if (flag(c, 'dry-run')) {
+                return { dryRun: true, action: 'remove', files: c.positionals };
+            }
+            const removed = await afc.remove(c.nam(), c.positionals, { restart: flag(c, 'restart'), wait: flag(c, 'wait'), timeoutSec: int(c, 'timeout') ?? 300, quiet: c.quiet });
+            return { action: 'removed', files: removed.map(file => file.fullName) };
+        },
+    },
+    {
+        name: 'afc untrack', summary: 'Stop managing files in the Advanced File Configurator; the servers keep their copies (the console\'s Untrack Configurations)', args: '<path>...',
+        writes: true, confirm: true, options: { ...YES, ...DRY },
+        run: async c => {
+            if (!c.positionals.length) {
+                throw usage('Give the files to untrack, by full path on the servers');
+            }
+            needYes(c, `Untracking ${c.positionals.join(', ')}`);
+            if (flag(c, 'dry-run')) {
+                return { dryRun: true, action: 'untrack', files: c.positionals };
+            }
+            return { action: 'untracked', files: (await afc.untrack(c.nam(), c.positionals)).map(file => file.fullName), note: 'The servers still have these files' };
+        },
+    },
     {
         name: 'apply', summary: 'Create or update the classes, methods and contracts in a JSON file; --delete removes them',
         writes: true,
@@ -405,7 +536,7 @@ export const GLOBAL_OPTIONS: Record<string, OptionSpec> = {
     help: { type: 'boolean', short: 'h', description: 'Help for the command' },
 };
 
-export const VERSION = '0.1.0';
+export const VERSION = '0.2.0';
 
 export function describe(): unknown {
     return {

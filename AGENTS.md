@@ -24,6 +24,12 @@
 - Deletes need `--yes`. Confirm with the user before deleting anything you didn't create yourself.
 - For a test setup, keep the file you applied and remove it afterwards with `amcli apply -f <file> --delete --yes`, then `amcli update --yes --wait`.
 
+## Files on the servers
+
+- `amcli afc fetch <path> -o <file>` gets a file as the server has it; edit it, then `amcli afc upload <file> --dir <folder> --send --wait --yes` posts it back to every server.
+- Upload single files, never folders.
+- `afc remove` deletes files you added from every server, and puts product files back to the original. `afc untrack` only makes AFC forget a file. Confirm with the user before either.
+
 ## Anything else
 
 `amcli api ops --search <text>` finds console API operations, and `amcli api GET <path>` reads any of them. Raw writes (`amcli api POST|PUT|DELETE`) need `--yes`; prefer the dedicated commands, which check names and keep properties you didn't mention.

@@ -28,6 +28,13 @@ amcli class get Passkey1             # secrets show as <redacted>
 3. For several objects, write a JSON file and use `amcli apply -f file.json --dry-run`, then `amcli apply -f file.json`. Files use display names, and `${env:NAME}` for secrets.
 4. Nothing reaches the Identity Servers until `amcli update --yes --wait`. It can interrupt service, so make sure the user agreed to an Update on this system.
 
+## Files on the servers
+
+- `amcli afc list` shows the files the Advanced File Configurator keeps.
+- To change a server file: `amcli afc fetch <path> -o <file>`, edit, then `amcli afc upload <file> --dir <folder> --send --wait --yes`.
+- One file at a time; never folders.
+- `amcli afc remove <path> --yes` deletes added files from the servers and restores product files; `afc untrack` only stops tracking. Ask first.
+
 ## Cleaning up
 
 `amcli apply -f file.json --delete --yes` removes what a file lists (contracts, then methods, then classes); then `amcli update --yes --wait`. Ask before deleting anything you didn't create.
