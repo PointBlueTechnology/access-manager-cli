@@ -18,6 +18,7 @@ A command-line client for the OpenText Access Manager (NAM) Administration Conso
 - [For scripts and agents](#for-scripts-and-agents)
 - [Status](#status)
 - [Developing](#developing)
+- [Security](#security)
 
 ## Requirements
 
@@ -163,6 +164,10 @@ npm test               # unit tests, against an in-memory console
 npm run amcli -- describe
 npm run build          # compiles to dist/ for the npm package
 ```
+
+## Security
+
+Please report vulnerabilities privately, as described in [SECURITY.md](SECURITY.md).
 
 ## License
 

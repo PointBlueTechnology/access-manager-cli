@@ -8,13 +8,21 @@
     "type": "git",
     "url": "git+https://github.com/PointBlueTechnology/access-manager-cli.git"
   },
+  "homepage": "https://github.com/PointBlueTechnology/access-manager-cli#readme",
+  "bugs": {
+    "url": "https://github.com/PointBlueTechnology/access-manager-cli/issues"
+  },
   "keywords": [
     "access-manager",
     "netiq",
     "opentext",
     "nam",
+    "identity-and-access-management",
+    "authentication",
     "cli",
-    "automation"
+    "automation",
+    "devops",
+    "ai-agents"
   ],
   "type": "module",
   "bin": {
