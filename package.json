@@ -1,0 +1,31 @@
+{
+  "name": "access-manager-cli",
+  "version": "0.1.0",
+  "description": "Command-line client for the OpenText Access Manager Admin Console API, made for scripts and AI agents",
+  "license": "MIT",
+  "author": "PointBlue Technology",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/PointBlueTechnology/access-manager-cli.git"
+  },
+  "keywords": ["access-manager", "netiq", "opentext", "nam", "cli", "automation"],
+  "type": "module",
+  "bin": {
+    "amcli": "dist/cli.js"
+  },
+  "files": ["dist", "skills", "examples", "AGENTS.md", "README.md", "LICENSE"],
+  "engines": {
+    "node": ">=20.12"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "check": "tsc --noEmit",
+    "test": "node --test test/*.test.ts",
+    "amcli": "node src/cli.ts",
+    "prepack": "npm run build"
+  },
+  "devDependencies": {
+    "@types/node": "26.6.6",
+    "typescript": "7.0.2"
+  }
+}

@@ -1,0 +1,31 @@
+{
+  "classes": [
+    {
+      "name": "Passkey1",
+      "javaClass": "com.pointbluetech.nam.login.passkey.PasskeyAuthClass",
+      "properties": {
+        "RP_ID": "idp.example.com",
+        "ORIGINS": "https://idp.example.com",
+        "RECOVERY_PEPPER": "${env:PASSKEY_RECOVERY_PEPPER}"
+      }
+    }
+  ],
+  "methods": [
+    {
+      "name": "PasskeyLogin",
+      "class": "Passkey1",
+      "userStores": ["Corporate eDirectory"],
+      "identifiesUser": true,
+      "properties": { "MODE": "LOGIN" }
+    }
+  ],
+  "contracts": [
+    {
+      "name": "PasskeyLogin",
+      "uri": "/passkey/login",
+      "methods": ["PasskeyLogin"],
+      "cardId": "PasskeyLogin",
+      "image": "AAFIDOU2F"
+    }
+  ]
+}
