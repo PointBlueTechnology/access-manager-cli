@@ -8,9 +8,25 @@ import { CliError, usage } from './errors.ts';
 import { Nam } from './nam.ts';
 import { print, printError } from './output.ts';
 
+/** Global options may come before the command too: amcli --env-file x class list */
+function leadingGlobals(argv: string[]): number {
+    let index = 0;
+    while (index < argv.length && argv[index].startsWith('-')) {
+        const token = argv[index];
+        const name = token.replace(/^--?/, '').split('=')[0];
+        const spec = GLOBAL_OPTIONS[name] ?? Object.values(GLOBAL_OPTIONS).find(o => o.short === name);
+        if (!spec) {
+            break;
+        }
+        index += spec.type === 'string' && !token.includes('=') ? 2 : 1;
+    }
+    return index;
+}
+
 function findCommand(argv: string[]): { command?: Command; rest: string[] } {
+    const skip = leadingGlobals(argv);
     const words = [];
-    for (const token of argv) {
+    for (const token of argv.slice(skip)) {
         if (token.startsWith('-')) {
             break;
         }
@@ -23,7 +39,7 @@ function findCommand(argv: string[]): { command?: Command; rest: string[] } {
         const name = words.slice(0, n).join(' ');
         const command = COMMANDS.find(c => c.name === name);
         if (command) {
-            return { command, rest: argv.slice(n) };
+            return { command, rest: [...argv.slice(0, skip), ...argv.slice(skip + n)] };
         }
     }
     return { rest: argv };
