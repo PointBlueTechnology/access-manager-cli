@@ -13,6 +13,10 @@ export interface ClassSpec {
     javaClass: string;
     typeId?: number;
     properties?: Properties;
+    /** Remove these properties */
+    unsetProperties?: string[];
+    /** Replace all properties with `properties` instead of merging */
+    replaceProperties?: boolean;
 }
 
 export interface MethodSpec {
@@ -23,6 +27,10 @@ export interface MethodSpec {
     overwriteRealUser?: boolean;
     overwriteTempUser?: boolean;
     properties?: Properties;
+    /** Remove these properties */
+    unsetProperties?: string[];
+    /** Replace all properties with `properties` instead of merging */
+    replaceProperties?: boolean;
 }
 
 export interface ContractSpec {
@@ -36,6 +44,10 @@ export interface ContractSpec {
     trustLevel?: number;
     allowProxying?: boolean;
     properties?: Properties;
+    /** Remove these properties */
+    unsetProperties?: string[];
+    /** Replace all properties with `properties` instead of merging */
+    replaceProperties?: boolean;
 }
 
 /** How properties combine with what's already there. */

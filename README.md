@@ -42,6 +42,7 @@ Settings come from environment variables, or from an env file given with `--env-
 | `AMCLI_USER` | Console administrator (default `admin`) |
 | `AMCLI_PASSWORD` or `AMCLI_PASSWORD_FILE` | Its password, or a file holding it. `--password-stdin` reads it from stdin. It's never accepted as a flag, where it would show in process lists and shell history |
 | `AMCLI_CA_FILE` | PEM file of the CA that signed the console's certificate |
+| `AMCLI_TLS_SERVERNAME` | The name on the console's certificate, when `AMCLI_URL` uses an address |
 | `AMCLI_INSECURE=1` | Skip certificate checks. For test systems only |
 | `AMCLI_CLUSTER` | The Identity Server cluster, by name or ID. Not needed when there's only one |
 | `AMCLI_TIMEOUT_MS` | Per-request timeout (default 60000) |
@@ -93,11 +94,18 @@ Properties given with `--prop NAME=VALUE` or `--props-file` are merged into what
 ```
 
 - **Idempotent:** what exists and matches is left alone, so running it again changes nothing. `--dry-run` shows the plan first.
-- **Merged properties:** properties the file doesn't mention are kept. Set `"replaceProperties": true` to replace them.
-- **Secrets stay out of the file:** a value written `${env:NAME}` is read from the environment.
-- **Teardown:** `apply -f <file> --delete --yes` removes what the file lists, contracts first, then methods, then classes.
+- **Merged properties:** properties the file doesn't mention are kept. On any object, `"unsetProperties": ["NAME"]` removes some and `"replaceProperties": true` replaces them all (or set it for the whole file).
+- **Removing:** a `"remove": {"contracts": [...], "methods": [...], "classes": [...]}` section deletes those, after everything else, with `--yes`. `apply -f <file> --delete --yes` instead deletes everything the file lists, contracts first, then methods, then classes.
+- **Values from elsewhere:** in any string, `${env:NAME}` reads the environment (`${env:NAME:-default}` with a fallback) and `${file:path}` reads a file, relative to the apply file. Secrets and long values such as certificates stay out of it.
+- **Undo:** `--backup <file>` writes an apply file that reverses the run exactly: settings it changed go back to their old values, settings it added are removed, objects it created are deleted and objects it deleted come back. It only records what the run touched, but that can include secrets, so it's written readable by you alone, and an existing one is never overwritten.
 
-This suits test setups: apply a file, run `amcli update --yes --wait`, test, then apply it again with `--delete` and update.
+This suits test setups:
+
+```bash
+amcli apply -f setup.json --backup restore.json && amcli update --yes --wait
+# ...test...
+amcli apply -f restore.json --yes && amcli update --yes --wait && rm restore.json
+```
 
 Contract fields: `name`, `uri`, `methods`, `cardId` (default: the name), `cardText`, `image` (default `AAFIDOU2F`), `timeout` (minutes, default 60), `trustLevel`, `allowProxying` and `properties`. Method fields: `name`, `class`, `userStores`, `identifiesUser` (default true), `overwriteRealUser`, `overwriteTempUser` and `properties`. Class fields: `name`, `javaClass`, `typeId` and `properties`.
 

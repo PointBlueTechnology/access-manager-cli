@@ -96,7 +96,7 @@ export class Client {
             headers['Content-Length'] = String(payload.length);
         }
         return new Promise((resolve, reject) => {
-            const request = https.request(url, { method, headers, agent: this.agent, timeout: this.config.timeoutMs }, response => {
+            const request = https.request(url, { method, headers, agent: this.agent, timeout: this.config.timeoutMs, servername: this.config.tlsServerName }, response => {
                 const chunks: Buffer[] = [];
                 response.on('data', chunk => chunks.push(chunk));
                 response.on('end', () => resolve({ status: response.statusCode ?? 0, data: Buffer.concat(chunks) }));
@@ -132,7 +132,7 @@ function parse(text: string): unknown {
 
 function connectionError(url: string, error: Error & { code?: string }): CliError {
     const tls = /CERT|SELF_SIGNED|UNABLE_TO_VERIFY|ERR_TLS/.test(error.code ?? '');
-    const hint = tls ? ' Set AMCLI_CA_FILE to the console certificate\'s CA, or AMCLI_INSECURE=1 on a test system.' : '';
+    const hint = tls ? ' Set AMCLI_CA_FILE to the console certificate\'s CA (and AMCLI_TLS_SERVERNAME to its name if you connect by address), or AMCLI_INSECURE=1 on a test system.' : '';
     return new CliError('CONNECTION', `Can't reach ${url}: ${error.message}.${hint}`);
 }
 

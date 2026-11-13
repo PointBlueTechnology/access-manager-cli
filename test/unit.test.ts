@@ -116,3 +116,43 @@ test('extract takes one file out of the console\'s .tar.gz download', async () =
     assert.equal(extract(Buffer.from('plain'), '/x').toString(), 'plain');
     fs.rmSync(dir, { recursive: true, force: true });
 });
+
+test('substitute reads ${env:NAME:-default} and ${file:path}', async () => {
+    const { substitute } = await import('../src/apply.ts');
+    const fs = await import('node:fs');
+    const os = await import('node:os');
+    const path = await import('node:path');
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'amcli-'));
+    fs.writeFileSync(path.join(dir, 'root.pem'), '-----BEGIN CERTIFICATE-----\nAAA\n-----END CERTIFICATE-----\n');
+    delete process.env.AMCLI_TEST_UNSET_NAME;
+    assert.equal(substitute('${env:AMCLI_TEST_UNSET_NAME:-fallback}', dir), 'fallback');
+    process.env.AMCLI_TEST_VALUE = 'v';
+    assert.equal(substitute('${env:AMCLI_TEST_VALUE:-fallback}', dir), 'v');
+    assert.equal(substitute('${file:root.pem}', dir), '-----BEGIN CERTIFICATE-----\nAAA\n-----END CERTIFICATE-----');
+    assert.throws(() => substitute('${file:missing.pem}', dir), /can't be read/);
+    fs.rmSync(dir, { recursive: true, force: true });
+});
+
+test('a backup undoes an apply exactly: old values back, added ones unset, created objects removed', async () => {
+    const { Backup } = await import('../src/apply.ts');
+    const fake = new FakeConsole();
+    await execute(nam(fake), FILE, await plan(nam(fake), FILE, false));
+    const before = structuredClone(fake.store);
+
+    const setup: ApplyFile = {
+        classes: [{ name: 'Passkey1', properties: { RECOVERY_CODES: 'false' } } as never],
+        methods: [{ name: 'Login', properties: { MODE: 'MANAGE', ACCOUNT_CHECK: 'verify-rights' } } as never],
+        contracts: [{ name: 'Extra', uri: '/x', methods: ['Login'] }],
+    };
+    const backup = new Backup();
+    await execute(nam(fake), setup, await plan(nam(fake), setup, false), backup);
+    assert.equal((fake.store.methods[0].nidsAuthClassProperties as Record<string, string>).MODE, 'MANAGE');
+    assert.equal(fake.store.contracts.length, 2);
+    // Only what the setup touched is recorded: not the pepper
+    assert.deepEqual(backup.restore.classes, [{ name: 'Passkey1', unsetProperties: ['RECOVERY_CODES'] }]);
+    assert.deepEqual(backup.restore.methods, [{ name: 'Login', properties: { MODE: 'LOGIN' }, unsetProperties: ['ACCOUNT_CHECK'] }]);
+    assert.deepEqual(backup.restore.remove.contracts, ['Extra']);
+
+    await execute(nam(fake), backup.restore, await plan(nam(fake), backup.restore, false));
+    assert.deepEqual(fake.store, before);
+});

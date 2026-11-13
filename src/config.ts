@@ -11,6 +11,7 @@ import { CliError, usage } from './errors.ts';
  *   AMCLI_PASSWORD       its password, or
  *   AMCLI_PASSWORD_FILE  a file holding it
  *   AMCLI_CA_FILE        PEM file of the CA that signed the console's certificate
+ *   AMCLI_TLS_SERVERNAME check the certificate against this name, when AMCLI_URL uses an address
  *   AMCLI_INSECURE=1     skip certificate checks (test systems only)
  *   AMCLI_CLUSTER        default cluster, by name or ID
  *   AMCLI_TIMEOUT_MS     per-request timeout (default 60000)
@@ -20,6 +21,7 @@ export interface Config {
     user: string;
     password: string;
     ca?: string;
+    tlsServerName?: string;
     insecure: boolean;
     cluster?: string;
     timeoutMs: number;
@@ -86,6 +88,7 @@ export function resolveConfig(flags: ConfigFlags): Config {
         user: flags.user ?? env.AMCLI_USER ?? 'admin',
         password,
         ca: env.AMCLI_CA_FILE ? fs.readFileSync(env.AMCLI_CA_FILE, 'utf8') : undefined,
+        tlsServerName: env.AMCLI_TLS_SERVERNAME || undefined,
         insecure: flags.insecure ?? /^(1|true|yes)$/i.test(env.AMCLI_INSECURE ?? ''),
         cluster: flags.cluster ?? env.AMCLI_CLUSTER,
         timeoutMs: Number.isFinite(timeout) && timeout > 0 ? timeout : 60000,

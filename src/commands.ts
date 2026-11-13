@@ -1,6 +1,6 @@
 import fs from 'node:fs';
 import * as afc from './afc.ts';
-import { execute, plan, readApplyFile } from './apply.ts';
+import { Backup, execute, plan, readApplyFile } from './apply.ts';
 import { CliError, usage } from './errors.ts';
 import { changes, classBody, classView, contractBody, contractView, methodBody, methodView } from './model.ts';
 import type { Properties, PropertyChange } from './model.ts';
@@ -438,11 +438,12 @@ export const COMMANDS: Command[] = [
         },
     },
     {
-        name: 'apply', summary: 'Create or update the classes, methods and contracts in a JSON file; --delete removes them',
+        name: 'apply', summary: 'Create or update the classes, methods and contracts in a JSON file, and delete the ones under "remove"; --delete removes everything it lists',
         writes: true,
         options: {
             file: { type: 'string', short: 'f', description: 'The JSON file, or - for stdin' },
-            delete: { type: 'boolean', description: 'Delete what the file lists instead (contracts, then methods, then classes); needs --yes' },
+            delete: { type: 'boolean', description: 'Delete what the file lists instead (contracts, then methods, then classes)' },
+            backup: { type: 'string', description: 'Write an apply file that undoes this one (old values back, created objects removed); it may hold secrets and is written 0600' },
             ...YES, ...DRY,
         },
         run: async c => {
@@ -451,18 +452,28 @@ export const COMMANDS: Command[] = [
                 throw usage('apply needs --file');
             }
             const file = readApplyFile(path);
-            const remove = flag(c, 'delete');
-            if (remove) {
-                needYes(c, 'Deleting what the file lists');
+            const backupFile = str(c, 'backup');
+            if (backupFile && fs.existsSync(backupFile) && !flag(c, 'dry-run')) {
+                throw new CliError('REJECTED', `${backupFile} already exists: apply it to undo the earlier run first, or remove it`);
             }
             const nam = c.nam();
-            const items = await plan(nam, file, remove);
+            const items = await plan(nam, file, flag(c, 'delete'));
             if (flag(c, 'dry-run')) {
                 return { dryRun: true, plan: items };
             }
-            const done = await execute(nam, file, items);
+            if (items.some(item => item.action === 'delete')) {
+                needYes(c, `Deleting ${items.filter(item => item.action === 'delete').map(item => `${item.kind} ${item.name}`).join(', ')}`);
+            }
+            const backup = backupFile ? new Backup() : undefined;
+            let done: Awaited<ReturnType<typeof execute>>;
+            try {
+                done = await execute(nam, file, items, backup);
+            } finally {
+                // Even after a failure part-way, keep what's needed to undo the part that was done
+                backup?.write(backupFile!);
+            }
             const changed = done.some(item => item.action !== 'unchanged' && item.action !== 'absent');
-            return { applied: done, next: changed ? 'Run amcli update --yes to apply it to the Identity Servers' : undefined };
+            return { applied: done, backup: backupFile, next: changed ? 'Run amcli update --yes to apply it to the Identity Servers' : undefined };
         },
     },
     {
@@ -536,7 +547,7 @@ export const GLOBAL_OPTIONS: Record<string, OptionSpec> = {
     help: { type: 'boolean', short: 'h', description: 'Help for the command' },
 };
 
-export const VERSION = '0.2.0';
+export const VERSION = '0.3.0';
 
 export function describe(): unknown {
     return {
@@ -551,6 +562,7 @@ export function describe(): unknown {
             AMCLI_PASSWORD: 'Its password (never accepted as a flag)',
             AMCLI_PASSWORD_FILE: 'File holding the password',
             AMCLI_CA_FILE: 'PEM CA for the console certificate',
+            AMCLI_TLS_SERVERNAME: 'Name to check the certificate against, when AMCLI_URL uses an address',
             AMCLI_INSECURE: '1 to skip certificate checks (test systems only)',
             AMCLI_CLUSTER: 'Default Identity Server cluster',
             AMCLI_TIMEOUT_MS: 'Per-request timeout (default 60000)',
