@@ -2,6 +2,10 @@
 
 All notable changes to this project are listed here. Versions follow [Semantic Versioning](https://semver.org).
 
+## 0.7.0
+
+- `amcli mcp`: runs amcli as a Model Context Protocol server on stdio, for AI agents, with no new dependencies. Every command is a tool, with its arguments and options as typed inputs, generated from the same table as `help` and `describe`. `--read-only` offers only the tools that don't change the console. Secrets stay redacted, deleting and `update` need `yes: true`, writes take `dry-run: true`, and tools carry read-only and destructive annotations. Errors are tool results with the CLI's codes, and messages name tools and inputs rather than commands and flags
+
 ## 0.6.1
 
 - `--settings <file>` loads the settings file. Use it instead of `--env-file`: Node.js reads any `--env-file` on the command line itself (nodejs/node#54237) and exits with code 9 if the file is missing, before amcli starts, which looks like `backup --exit-code` finding something. `--env-file` still works as an alias, and `AMCLI_ENV_FILE` is unaffected

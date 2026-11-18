@@ -22,6 +22,7 @@ A command-line client for the OpenText Access Manager (NAM) Administration Conso
 - [SAML providers](#saml-providers)
 - [Certificates](#certificates)
 - [For scripts and agents](#for-scripts-and-agents)
+- [AI agents over MCP](#ai-agents-over-mcp)
 - [Status](#status)
 - [Developing](#developing)
 - [Security](#security)
@@ -81,6 +82,7 @@ Run `amcli help` for the list, `amcli help <command>` for one command, and `amcl
 | `saml list` / `get` / `metadata` / `create-sp` / `delete` / `attribute-maps` | SAML 2 service and identity providers; see [SAML providers](#saml-providers) |
 | `certs list` / `get` | Certificates and trusted roots, with the days each has left; see [Certificates](#certificates) |
 | `afc list` / `upload` / `send` / `fetch` / `get` / `remove` / `untrack` | Files on the servers, through the Advanced File Configurator; see [Files on the servers](#files-on-the-servers) |
+| `mcp [--read-only]` | Runs amcli as an MCP server for AI agents, with every command as a tool; see [AI agents over MCP](#ai-agents-over-mcp) |
 | `api ops`, `api <METHOD> <path>` | Lists the console API's operations, or calls any of them |
 
 Changes to classes, methods and contracts are saved in the console but reach the Identity Servers only when you run `amcli update --yes`, as in the console.
@@ -269,6 +271,38 @@ The console's APIs can't list keystores or create trusted roots, so `certs` read
 - **Guarded:** deletes, `update` and raw `api` calls other than GET need `--yes`; every write takes `--dry-run`.
 
 [AGENTS.md](AGENTS.md) is a short guide for coding agents, and [skills/amcli/SKILL.md](skills/amcli/SKILL.md) is a Claude skill with the same guidance.
+
+## AI agents over MCP
+
+```bash
+amcli --settings ~/.config/amcli/amcli.env mcp --read-only
+```
+
+`amcli mcp` runs amcli as a [Model Context Protocol](https://modelcontextprotocol.io) server on stdio, so an AI agent can call it directly instead of running commands and reading their output. Every command is a tool, with its arguments and options as typed inputs. The tools are built from the same table as `amcli help`, so they always match the CLI.
+
+To add it to Claude Code:
+
+```bash
+claude mcp add amcli -- amcli --settings /path/to/amcli.env mcp --read-only
+```
+
+Other MCP clients take the same command in their configuration:
+
+```json
+{
+  "mcpServers": {
+    "amcli": { "command": "amcli", "args": ["--settings", "/path/to/amcli.env", "mcp", "--read-only"] }
+  }
+}
+```
+
+- **Start with `--read-only`.** It offers only the tools that don't change the console: 25 of the 43. Leave it off only when the agent should make changes. `report` with `ag` still creates a Code Promotion export on the console to read, then deletes it.
+- **The CLI's safety still applies.** Secrets are redacted. Deleting and `update` need `yes: true`, and every tool that changes the console takes `dry-run: true`. Each tool is marked read-only or destructive, so clients can ask you before calling one. `amcli mcp --reveal-secrets` turns off redaction for every call; avoid it.
+- **Tools and inputs:** a tool is named after its command, with underscores (`saml_get`, `class_delete`). Arguments are named after the help text: `name`, `names` for several, `export` and `export2` for `diff`. Errors are tool results with the same `code` and `message` as on the command line.
+- **Settings** are read on the first tool call. Put the password in `AMCLI_PASSWORD_FILE`; `--password-stdin` can't work, because stdin carries the protocol.
+- **Calls run one at a time,** in the order they arrive.
+
+Tested with the official MCP TypeScript SDK's client against Access Manager 5.1.3.
 
 ## Status
 

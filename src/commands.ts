@@ -16,6 +16,7 @@ import { kindLabel } from './nam.ts';
 import type { Kind, Nam } from './nam.ts';
 import { runUpdate, UPDATE_TYPES } from './update.ts';
 import type { Method } from './client.ts';
+import type { ConfigFlags } from './config.ts';
 
 /**
  * Every command, with the options it takes. The same table drives argument parsing, `amcli help`
@@ -33,6 +34,8 @@ export interface Context {
     values: Record<string, string | boolean | string[] | undefined>;
     positionals: string[];
     quiet: boolean;
+    /** The connection settings given on the command line, for commands that connect themselves (mcp) */
+    config?: ConfigFlags;
 }
 
 export interface Command {
@@ -47,6 +50,8 @@ export interface Command {
     offline?: boolean;
     /** Output holds no secrets and must not be redacted (describe) */
     plain?: boolean;
+    /** Talks over stdin and stdout itself, so nothing is printed after it (mcp) */
+    stdio?: boolean;
     run: (context: Context) => Promise<unknown>;
 }
 
@@ -770,6 +775,17 @@ export const COMMANDS: Command[] = [
         },
     },
     {
+        name: 'mcp', summary: 'Run as a Model Context Protocol server on stdio, with every command as a tool, for AI agents', stdio: true,
+        options: {
+            'read-only': { type: 'boolean', description: 'Only offer the tools that don\'t change the console' },
+        },
+        run: async c => {
+            const { serve } = await import('./mcp.ts');
+            await serve({ readOnly: flag(c, 'read-only'), revealSecrets: flag(c, 'reveal-secrets'), config: c.config ?? {} });
+            return undefined;
+        },
+    },
+    {
         name: 'api ops', summary: 'List the console API\'s operations from its OpenAPI description',
         options: {
             tag: { type: 'string', description: 'Only operations with this tag (group)' },
@@ -841,7 +857,7 @@ export const GLOBAL_OPTIONS: Record<string, OptionSpec> = {
     help: { type: 'boolean', short: 'h', description: 'Help for the command' },
 };
 
-export const VERSION = '0.6.1';
+export const VERSION = '0.7.0';
 
 export function describe(): unknown {
     return {

@@ -268,3 +268,52 @@ test('--settings loads the settings file; a missing one is a usage error from am
     assert.equal(both.status, 2);
     assert.match(both.stderr, /not both/);
 });
+
+test('mcp: tools come from the command table, with positionals and options as inputs', async () => {
+    const { positionalsOf, toolsFor, toInvocation, toolTerms } = await import('../src/mcp.ts');
+    assert.equal(toolTerms('Run amcli update --yes to apply it'), 'Run the update tool with yes: true to apply it');
+    assert.equal(toolTerms('run amcli saml get x'), 'run the saml_get tool x');
+    assert.equal(toolTerms('x isn\'t an amcli export folder'), 'x isn\'t an amcli export folder');
+    assert.equal(toolTerms('add --yes to go ahead, or --dry-run to see it first'), 'add yes: true to go ahead, or dry-run: true to see it first');
+    const { COMMANDS } = await import('../src/commands.ts');
+    assert.deepEqual(positionalsOf('<export> [<export>]').map(p => [p.name, p.required]), [['export', true], ['export2', false]]);
+    assert.deepEqual(positionalsOf('<name|id|entityID>...').map(p => [p.name, p.many]), [['names', true]]);
+    const all = toolsFor(false).map(t => t.tool.name);
+    const readOnly = toolsFor(true).map(t => t.tool.name);
+    assert.ok(all.includes('class_delete') && all.includes('update') && all.includes('saml_create_sp'));
+    assert.ok(!readOnly.includes('class_delete') && !readOnly.includes('update') && !readOnly.includes('api') && readOnly.includes('report'));
+    assert.ok(!all.includes('mcp') && !all.includes('describe'));
+    const deleteTool = toolsFor(false).find(t => t.tool.name === 'class_delete')!.tool as { annotations: { destructiveHint: boolean }; inputSchema: { properties: Record<string, unknown> } };
+    assert.equal(deleteTool.annotations.destructiveHint, true);
+    assert.ok('yes' in deleteTool.inputSchema.properties && !('exit-code' in deleteTool.inputSchema.properties));
+    const diff = COMMANDS.find(c => c.name === 'diff')!;
+    assert.deepEqual(toInvocation(diff, { export: 'a', export2: 'b', only: ['apply'], summary: true }), { values: { only: ['apply'], summary: true }, positionals: ['a', 'b'] });
+    assert.throws(() => toInvocation(diff, { export: 'a', bogus: 1 }), /no input bogus/);
+    assert.throws(() => toInvocation(diff, {}), /needs export/);
+    assert.throws(() => toInvocation(diff, { export: 'a', summary: 'yes' }), /true or false/);
+});
+
+test('mcp: calls run the command, redact secrets, and report errors as tool errors', async () => {
+    const { McpServer } = await import('../src/mcp.ts');
+    const fake = new FakeConsole();
+    const server = new McpServer({ readOnly: false, revealSecrets: false, config: {}, nam: () => nam(fake) });
+    const init = await server.handle({ jsonrpc: '2.0', id: 1, method: 'initialize', params: { protocolVersion: '2025-06-18' } }) as { result: { protocolVersion: string } };
+    assert.equal(init.result.protocolVersion, '2025-06-18');
+    assert.equal(await server.handle({ jsonrpc: '2.0', method: 'notifications/initialized' }), undefined);
+    const call = async (name: string, args: Record<string, unknown>) => {
+        const reply = await server.handle({ jsonrpc: '2.0', id: 2, method: 'tools/call', params: { name, arguments: args } }) as { result: { content: { text: string }[]; isError?: boolean } };
+        return { isError: reply.result.isError === true, body: JSON.parse(reply.result.content[0].text) };
+    };
+    const shown = await call('class_get', { name: 'Passkey1' });
+    assert.equal(shown.isError, false);
+    assert.equal(JSON.stringify(shown.body).includes('pepper-value'), false, 'secrets are redacted');
+    const refused = await call('class_delete', { names: ['Passkey1'] });
+    assert.equal(refused.isError, true);
+    assert.equal(refused.body.error.code, 'CONFIRM');
+    assert.match(refused.body.error.message, /add yes: true to go ahead, or dry-run: true/);
+    assert.equal(fake.store.classes.length, 1, 'nothing deleted without yes');
+    const missing = await call('class_get', { name: 'nope' });
+    assert.equal(missing.body.error.code, 'NOT_FOUND');
+    const unknown = await server.handle({ jsonrpc: '2.0', id: 3, method: 'tools/call', params: { name: 'nope', arguments: {} } }) as { error: { code: number } };
+    assert.equal(unknown.error.code, -32602);
+});

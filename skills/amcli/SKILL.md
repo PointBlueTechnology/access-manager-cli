@@ -40,6 +40,8 @@ amcli class get Passkey1             # secrets show as <redacted>
 
 `amcli export --out <new folder>` saves everything both console APIs can read (secrets blanked), with `manifest.json` listing skips and failures. `--reveal-secrets` only if the user asks; the folder then holds secrets.
 
+If the amcli MCP server is connected (tools such as `class_get` and `report`), use its tools rather than the shell: they take the same inputs as the flags here (`yes: true`, `dry-run: true`).
+
 For regular backups use `amcli backup <folder> --exit-code`: a dated export, what changed since the last backup, expiring certificates, and the oldest removed beyond `--keep`. Exit 9 means something changed or a certificate needs attention; read `changes` and `certificates` in the result. It removes only the dated folders it made.
 
 ## Reports

@@ -122,17 +122,18 @@ async function main(argv: string[]): Promise<number> {
     const output = { revealSecrets: values['reveal-secrets'] === true, compact: values.compact === true };
     let nam: Nam | undefined;
     try {
+        const flags = {
+            envFile: settingsFile,
+            url: values.url as string | undefined,
+            user: values.user as string | undefined,
+            cluster: values.cluster as string | undefined,
+            insecure: values.insecure === true ? true : undefined,
+            passwordStdin: values['password-stdin'] === true,
+        };
         const result = await command.run({
             nam: () => {
                 if (!nam) {
-                    const config = resolveConfig({
-                        envFile: settingsFile,
-                        url: values.url as string | undefined,
-                        user: values.user as string | undefined,
-                        cluster: values.cluster as string | undefined,
-                        insecure: values.insecure === true ? true : undefined,
-                        passwordStdin: values['password-stdin'] === true,
-                    });
+                    const config = resolveConfig(flags);
                     nam = new Nam(new Client(config), config.cluster);
                 }
                 return nam;
@@ -140,7 +141,11 @@ async function main(argv: string[]): Promise<number> {
             values,
             positionals: parsed.positionals,
             quiet: values.quiet === true,
+            config: flags,
         });
+        if (command.stdio) {
+            return 0;
+        }
         print(result, { ...output, revealSecrets: output.revealSecrets || command.plain === true });
         // A command may set an exit code that isn't an error, such as diff --exit-code
         return typeof process.exitCode === 'number' ? process.exitCode : 0;
