@@ -10,7 +10,7 @@ description: Read and change an OpenText Access Manager (NAM) Identity Server's 
 ## Before anything else
 
 - Run `amcli describe` to see every command and option. Don't guess flags.
-- Run `amcli ping` to check the connection. Settings come from `AMCLI_URL`, `AMCLI_USER`, `AMCLI_PASSWORD` or `AMCLI_PASSWORD_FILE`, `AMCLI_CA_FILE` and `AMCLI_CLUSTER`, or from `--env-file`. Never pass or print a password.
+- Run `amcli ping` to check the connection. Settings come from `AMCLI_URL`, `AMCLI_USER`, `AMCLI_PASSWORD` or `AMCLI_PASSWORD_FILE`, `AMCLI_CA_FILE` and `AMCLI_CLUSTER`, or from a settings file (`--settings <file>` or `AMCLI_ENV_FILE`; not `--env-file`, which Node.js intercepts). Never pass or print a password.
 - Run `amcli status` to see if an Update is already pending.
 
 ## Reading

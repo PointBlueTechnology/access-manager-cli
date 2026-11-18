@@ -5,7 +5,7 @@
 ## Start here
 
 1. `amcli describe` gives every command, option, setting and exit code as JSON. Read it instead of guessing flags.
-2. `amcli ping` confirms the URL and credentials. The credentials come from the environment (`AMCLI_URL`, `AMCLI_USER`, `AMCLI_PASSWORD` or `AMCLI_PASSWORD_FILE`) or an env file (`--env-file`). Never put a password on the command line, and never print or log one.
+2. `amcli ping` confirms the URL and credentials. The credentials come from the environment (`AMCLI_URL`, `AMCLI_USER`, `AMCLI_PASSWORD` or `AMCLI_PASSWORD_FILE`) or a settings file (`--settings <file>` or `AMCLI_ENV_FILE`). Don't use `--env-file`: Node.js reads that option itself and exits with code 9 if the file is missing. Never put a password on the command line, and never print or log one.
 3. `amcli status` shows whether an Update is already pending before you change anything.
 
 ## Reading output

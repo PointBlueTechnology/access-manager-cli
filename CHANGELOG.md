@@ -2,6 +2,11 @@
 
 All notable changes to this project are listed here. Versions follow [Semantic Versioning](https://semver.org).
 
+## 0.6.1
+
+- `--settings <file>` loads the settings file. Use it instead of `--env-file`: Node.js reads any `--env-file` on the command line itself (nodejs/node#54237) and exits with code 9 if the file is missing, before amcli starts, which looks like `backup --exit-code` finding something. `--env-file` still works as an alias, and `AMCLI_ENV_FILE` is unaffected
+- The examples, `.env.example`, AGENTS.md and the skill use `--settings`
+
 ## 0.6.0
 
 - `amcli backup <folder>`: an export made for a schedule. Each run exports into a new folder named for the time, compares it with the previous backup, lists certificates expired or expiring within `--expiring` days (default 30), writes the what-uses-what report, and removes the oldest so `--keep` remain (default 30). `--exit-code` exits 9 when the configuration changed or a certificate needs attention; `--ignore-cert` leaves out ones nothing uses. A failed run leaves nothing behind, and only folders `backup` named are ever removed

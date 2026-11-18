@@ -17,5 +17,5 @@ After=network-online.target
 Type=oneshot
 User=amcli
 # AMCLI_URL, AMCLI_USER, AMCLI_PASSWORD_FILE and AMCLI_CA_FILE; readable by the amcli user alone
-ExecStart=/usr/local/bin/amcli --env-file /etc/amcli/amcli.env --quiet backup /var/backups/amcli --keep 30 --exit-code
+ExecStart=/usr/local/bin/amcli --settings /etc/amcli/amcli.env --quiet backup /var/backups/amcli --keep 30 --exit-code
 UMask=0077

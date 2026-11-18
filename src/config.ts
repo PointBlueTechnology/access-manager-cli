@@ -3,7 +3,7 @@ import { CliError, usage } from './errors.ts';
 
 /**
  * Connection settings. They come from environment variables, optionally loaded from an env file
- * (--env-file or AMCLI_ENV_FILE). The password is never taken from the command line, where it
+ * (--settings or AMCLI_ENV_FILE). The password is never taken from the command line, where it
  * would show in process lists and shell history.
  *
  *   AMCLI_URL            the Administration Console, e.g. https://ac.example.com:8443 (/nps is added)
@@ -46,7 +46,7 @@ export function loadEnvFile(path: string | undefined): void {
         return;
     }
     if (!fs.existsSync(file)) {
-        throw usage(`Env file not found: ${file}`);
+        throw usage(`Settings file not found: ${file}`);
     }
     process.loadEnvFile(file);
 }

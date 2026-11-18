@@ -828,7 +828,8 @@ async function apiOps(context: Context): Promise<unknown> {
 }
 
 export const GLOBAL_OPTIONS: Record<string, OptionSpec> = {
-    'env-file': { type: 'string', description: 'Load settings from this env file (or set AMCLI_ENV_FILE)' },
+    settings: { type: 'string', description: 'Load settings from this env file (or set AMCLI_ENV_FILE)' },
+    'env-file': { type: 'string', description: 'Same as --settings. Prefer --settings: Node.js reads --env-file itself and exits with code 9 if the file is missing' },
     url: { type: 'string', description: 'Administration Console URL (or AMCLI_URL)' },
     user: { type: 'string', description: 'Console administrator (or AMCLI_USER; default admin)' },
     cluster: { type: 'string', description: 'Identity Server cluster by name or ID (or AMCLI_CLUSTER)' },
@@ -840,7 +841,7 @@ export const GLOBAL_OPTIONS: Record<string, OptionSpec> = {
     help: { type: 'boolean', short: 'h', description: 'Help for the command' },
 };
 
-export const VERSION = '0.6.0';
+export const VERSION = '0.6.1';
 
 export function describe(): unknown {
     return {

@@ -255,3 +255,16 @@ test('backups are named by time, listed only when complete, and pruned oldest fi
         fs.rmSync(root, { recursive: true, force: true });
     }
 });
+
+test('--settings loads the settings file; a missing one is a usage error from amcli, not Node', async () => {
+    const { spawnSync } = await import('node:child_process');
+    const cli = new URL('../src/cli.ts', import.meta.url).pathname;
+    const run = (...args: string[]) => spawnSync(process.execPath, [cli, ...args], { encoding: 'utf8', env: { PATH: process.env.PATH } });
+    const missing = run('--settings', '/nonexistent/amcli.env', 'ping');
+    assert.equal(missing.status, 2);
+    assert.match(missing.stderr, /Settings file not found/);
+    assert.equal(run('--settings', '/nonexistent/amcli.env', '--version').stdout.trim(), run('--version').stdout.trim());
+    const both = run('--settings', 'a.env', '--env-file', '/dev/null', 'ping');
+    assert.equal(both.status, 2);
+    assert.match(both.stderr, /not both/);
+});

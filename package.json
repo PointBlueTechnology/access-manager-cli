@@ -1,6 +1,6 @@
 {
   "name": "access-manager-cli",
-  "version": "0.6.0",
+  "version": "0.6.1",
   "description": "Command-line client for the OpenText Access Manager Admin Console API, made for scripts and AI agents",
   "license": "MIT",
   "author": "PointBlue Technology",

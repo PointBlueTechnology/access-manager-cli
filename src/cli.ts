@@ -8,7 +8,7 @@ import { CliError, usage } from './errors.ts';
 import { Nam } from './nam.ts';
 import { print, printError } from './output.ts';
 
-/** Global options may come before the command too: amcli --env-file x class list */
+/** Global options may come before the command too: amcli --settings x class list */
 function leadingGlobals(argv: string[]): number {
     let index = 0;
     while (index < argv.length && argv[index].startsWith('-')) {
@@ -82,7 +82,7 @@ function help(command?: Command): string {
 }
 
 async function main(argv: string[]): Promise<number> {
-    // help and --version may follow global options too: amcli --env-file x --version
+    // help and --version may follow global options too: amcli --settings x --version
     const globals = argv.slice(0, leadingGlobals(argv));
     const first = argv[globals.length];
     if (first === '--version' || first === 'version') {
@@ -109,9 +109,15 @@ async function main(argv: string[]): Promise<number> {
         process.stdout.write(help(command) + '\n');
         return 0;
     }
-    // Load the env file before anything reads the environment, such as ${env:...} in apply files
+    const settings = values.settings as string | undefined;
+    const envFile = values['env-file'] as string | undefined;
+    if (settings && envFile && settings !== envFile) {
+        throw usage('Give --settings or --env-file, not both');
+    }
+    const settingsFile = settings ?? envFile;
+    // Load the settings before anything reads the environment, such as ${env:...} in apply files
     if (!command.offline) {
-        loadEnvFile(values['env-file'] as string | undefined);
+        loadEnvFile(settingsFile);
     }
     const output = { revealSecrets: values['reveal-secrets'] === true, compact: values.compact === true };
     let nam: Nam | undefined;
@@ -120,7 +126,7 @@ async function main(argv: string[]): Promise<number> {
             nam: () => {
                 if (!nam) {
                     const config = resolveConfig({
-                        envFile: values['env-file'] as string | undefined,
+                        envFile: settingsFile,
                         url: values.url as string | undefined,
                         user: values.user as string | undefined,
                         cluster: values.cluster as string | undefined,

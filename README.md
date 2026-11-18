@@ -41,7 +41,7 @@ Or run it without installing: `npx github:PointBlueTechnology/access-manager-cli
 
 ## Connecting
 
-Settings come from environment variables, or from an env file given with `--env-file` or `AMCLI_ENV_FILE`. [.env.example](.env.example) lists them all; copy it to `.env`, which git ignores:
+Settings come from environment variables, or from a file of them given with `--settings <file>` or `AMCLI_ENV_FILE`. [.env.example](.env.example) lists them all; copy it to `.env`, which git ignores:
 
 | Variable | Meaning |
 |---|---|
@@ -59,6 +59,8 @@ Settings come from environment variables, or from an env file given with `--env-
 export AMCLI_URL=https://ac.example.com:8443 AMCLI_PASSWORD_FILE=~/.amcli-password AMCLI_CA_FILE=~/ac-ca.pem
 amcli ping
 ```
+
+`--env-file` also works, but avoid it. Node.js reads any `--env-file` on the command line itself, even after the program's name ([nodejs/node#54237](https://github.com/nodejs/node/pull/54237)), and exits with code 9 if the file is missing, before amcli starts. That looks like the "found something" exit code that `backup`, `diff` and `certs` use.
 
 ## Commands
 
@@ -201,7 +203,7 @@ The result says what changed and which certificates need attention. With `--exit
 With cron, which mails a job's output, this mails the result only when something changed or the run failed:
 
 ```bash
-0 3 * * * amcli --env-file /etc/amcli/amcli.env -q backup /var/backups/amcli --exit-code > /var/log/amcli-backup.json 2>&1 || cat /var/log/amcli-backup.json
+0 3 * * * amcli --settings /etc/amcli/amcli.env -q backup /var/backups/amcli --exit-code > /var/log/amcli-backup.json 2>&1 || cat /var/log/amcli-backup.json
 ```
 
 For systemd, [examples/backup](examples/backup) has a service and a nightly timer; exit 9 marks the run failed, so `OnFailure=` can send the alert. A run against a test console took about 40 seconds.
