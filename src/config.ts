@@ -1,9 +1,11 @@
 import fs from 'node:fs';
+import path from 'node:path';
+import { parseEnv } from 'node:util';
 import { CliError, usage } from './errors.ts';
 
 /**
  * Connection settings. They come from environment variables, optionally loaded from an env file
- * (--settings or AMCLI_ENV_FILE). The password is never taken from the command line, where it
+ * (--settings or AMCLI_ENV_FILE), where relative file paths are relative to that file. The password is never taken from the command line, where it
  * would show in process lists and shell history.
  *
  *   AMCLI_URL            the Administration Console, e.g. https://ac.example.com:8443 (/nps is added)
@@ -40,15 +42,27 @@ export interface ConfigFlags {
     passwordStdin?: boolean;
 }
 
-export function loadEnvFile(path: string | undefined): void {
-    const file = path ?? process.env.AMCLI_ENV_FILE;
+/** Settings that name a file; relative ones in a settings file are relative to that file */
+const PATH_SETTINGS = ['AMCLI_CA_FILE', 'AMCLI_PASSWORD_FILE'];
+
+export function loadEnvFile(file: string | undefined): void {
+    file ??= process.env.AMCLI_ENV_FILE;
     if (!file) {
         return;
     }
     if (!fs.existsSync(file)) {
         throw usage(`Settings file not found: ${file}`);
     }
+    // Values already in the environment win, as with process.loadEnvFile
     process.loadEnvFile(file);
+    const fromFile = parseEnv(fs.readFileSync(file, 'utf8'));
+    const folder = path.dirname(path.resolve(file));
+    for (const key of PATH_SETTINGS) {
+        const value = fromFile[key];
+        if (value && process.env[key] === value && !path.isAbsolute(value)) {
+            process.env[key] = path.resolve(folder, value);
+        }
+    }
 }
 
 export function normalizeBaseUrl(url: string): string {
@@ -61,8 +75,8 @@ export function normalizeBaseUrl(url: string): string {
     if (parsed.protocol !== 'https:') {
         throw usage('AMCLI_URL must use https');
     }
-    const path = parsed.pathname.replace(/\/+$/, '');
-    parsed.pathname = path.endsWith('/nps') ? path : `${path}/nps`;
+    const pathname = parsed.pathname.replace(/\/+$/, '');
+    parsed.pathname = pathname.endsWith('/nps') ? pathname : `${pathname}/nps`;
     return parsed.toString().replace(/\/+$/, '');
 }
 

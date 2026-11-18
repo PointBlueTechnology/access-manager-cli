@@ -317,3 +317,34 @@ test('mcp: calls run the command, redact secrets, and report errors as tool erro
     const unknown = await server.handle({ jsonrpc: '2.0', id: 3, method: 'tools/call', params: { name: 'nope', arguments: {} } }) as { error: { code: number } };
     assert.equal(unknown.error.code, -32602);
 });
+
+test('relative file paths in a settings file are relative to that file; the environment still wins', async () => {
+    const fs = await import('node:fs');
+    const os = await import('node:os');
+    const path = await import('node:path');
+    const { loadEnvFile } = await import('../src/config.ts');
+    const dir = fs.realpathSync(fs.mkdtempSync(`${os.tmpdir()}/amcli-settings-`));
+    const keys = ['AMCLI_CA_FILE', 'AMCLI_PASSWORD_FILE', 'AMCLI_URL'];
+    const saved = Object.fromEntries(keys.map(k => [k, process.env[k]]));
+    try {
+        fs.writeFileSync(`${dir}/amcli.env`, 'AMCLI_URL=https://ac.example.com:8443\nAMCLI_CA_FILE=.state/ca.pem\nAMCLI_PASSWORD_FILE=/etc/amcli/password\n');
+        keys.forEach(k => delete process.env[k]);
+        loadEnvFile(`${dir}/amcli.env`);
+        assert.equal(process.env.AMCLI_CA_FILE, path.join(dir, '.state/ca.pem'));
+        assert.equal(process.env.AMCLI_PASSWORD_FILE, '/etc/amcli/password', 'absolute paths are kept');
+        assert.equal(process.env.AMCLI_URL, 'https://ac.example.com:8443', 'other settings are untouched');
+        keys.forEach(k => delete process.env[k]);
+        process.env.AMCLI_CA_FILE = 'mine.pem';
+        loadEnvFile(`${dir}/amcli.env`);
+        assert.equal(process.env.AMCLI_CA_FILE, 'mine.pem', 'a value already in the environment is left alone');
+    } finally {
+        for (const k of keys) {
+            if (saved[k] === undefined) {
+                delete process.env[k];
+            } else {
+                process.env[k] = saved[k];
+            }
+        }
+        fs.rmSync(dir, { recursive: true, force: true });
+    }
+});

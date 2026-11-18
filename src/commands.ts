@@ -857,7 +857,7 @@ export const GLOBAL_OPTIONS: Record<string, OptionSpec> = {
     help: { type: 'boolean', short: 'h', description: 'Help for the command' },
 };
 
-export const VERSION = '0.7.0';
+export const VERSION = '0.7.1';
 
 export function describe(): unknown {
     return {

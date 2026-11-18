@@ -42,7 +42,7 @@ Or run it without installing: `npx github:PointBlueTechnology/access-manager-cli
 
 ## Connecting
 
-Settings come from environment variables, or from a file of them given with `--settings <file>` or `AMCLI_ENV_FILE`. [.env.example](.env.example) lists them all; copy it to `.env`, which git ignores:
+Settings come from environment variables, or from a file of them given with `--settings <file>` or `AMCLI_ENV_FILE`. Variables already set win over the file. In the file, relative paths for `AMCLI_CA_FILE` and `AMCLI_PASSWORD_FILE` are relative to the file itself, so it works from any folder. [.env.example](.env.example) lists them all; copy it to `.env`, which git ignores:
 
 | Variable | Meaning |
 |---|---|
