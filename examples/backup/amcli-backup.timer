@@ -1,0 +1,12 @@
+# Runs amcli-backup.service every night at 03:00, or at the next boot if that was missed.
+
+[Unit]
+Description=Nightly Access Manager console backup
+
+[Timer]
+OnCalendar=*-*-* 03:00:00
+Persistent=true
+RandomizedDelaySec=10m
+
+[Install]
+WantedBy=timers.target

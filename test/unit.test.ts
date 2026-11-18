@@ -227,3 +227,31 @@ test('contractRefs finds contract IDs under contract-named keys and their childr
         other: 'ALC3',
     }).sort(), ['ALC1', 'ALC2']);
 });
+
+test('backups are named by time, listed only when complete, and pruned oldest first', async () => {
+    const fs = await import('node:fs');
+    const os = await import('node:os');
+    const { backupName, listBackups, toPrune } = await import('../src/backup.ts');
+    const { diffExports } = await import('../src/diff.ts');
+    assert.equal(backupName(new Date('2026-11-16T03:04:05.678Z')), '2026-11-16T03-04-05Z');
+    const root = fs.mkdtempSync(`${os.tmpdir()}/amcli-test-`);
+    try {
+        for (const name of ['2026-11-14T03-00-00Z', '2026-11-15T03-00-00Z', '2026-11-16T03-00-00Z']) {
+            fs.mkdirSync(`${root}/${name}/_backup`, { recursive: true });
+            fs.writeFileSync(`${root}/${name}/manifest.json`, '{}');
+            fs.writeFileSync(`${root}/${name}/a.json`, '{"x":1}');
+            fs.writeFileSync(`${root}/${name}/_backup/backup.json`, JSON.stringify({ name }));
+        }
+        fs.mkdirSync(`${root}/2026-11-17T03-00-00Z.partial`);
+        fs.mkdirSync(`${root}/2026-11-13T03-00-00Z`);
+        fs.mkdirSync(`${root}/notes`);
+        assert.deepEqual(listBackups(root), ['2026-11-14T03-00-00Z', '2026-11-15T03-00-00Z', '2026-11-16T03-00-00Z']);
+        assert.deepEqual(toPrune(listBackups(root), 2), ['2026-11-14T03-00-00Z']);
+        assert.deepEqual(toPrune(listBackups(root), 0), ['2026-11-14T03-00-00Z', '2026-11-15T03-00-00Z'], 'never removes the newest');
+        assert.deepEqual(toPrune(listBackups(root), 5), []);
+        // What a backup run writes beside the export doesn't count as a change
+        assert.equal(diffExports(`${root}/2026-11-15T03-00-00Z`, `${root}/2026-11-16T03-00-00Z`).summary.same, true);
+    } finally {
+        fs.rmSync(root, { recursive: true, force: true });
+    }
+});

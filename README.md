@@ -16,6 +16,7 @@ A command-line client for the OpenText Access Manager (NAM) Administration Conso
 - [Commands](#commands)
 - [Configuration files](#configuration-files)
 - [Exporting the configuration](#exporting-the-configuration)
+- [Scheduled backups](#scheduled-backups)
 - [Comparing configurations](#comparing-configurations)
 - [What uses what](#what-uses-what)
 - [SAML providers](#saml-providers)
@@ -72,6 +73,7 @@ Run `amcli help` for the list, `amcli help <command>` for one command, and `amcl
 | `userstore list` / `get` | User stores |
 | `apply -f <file>` | Creates or updates everything in a configuration file; `--delete` removes it |
 | `export --out <folder>` | Saves all the configuration the console's APIs can read, for backup and reference; see [Exporting the configuration](#exporting-the-configuration) |
+| `backup <folder>` | For a schedule: a dated export, what changed since the last one, expiring certificates, and the oldest removed; see [Scheduled backups](#scheduled-backups) |
 | `diff <export> [<export>]` | Compares two exports, or an export with the console now (`--live`); see [Comparing configurations](#comparing-configurations) |
 | `report [<export>]` | What uses what: SAML providers and Access Gateway resources → contracts → methods → classes and user stores, and what nothing refers to; see [What uses what](#what-uses-what) |
 | `saml list` / `get` / `metadata` / `create-sp` / `delete` / `attribute-maps` | SAML 2 service and identity providers; see [SAML providers](#saml-providers) |
@@ -176,6 +178,34 @@ amcli export --out backup-2026-11-13
 
 A full export of a test console with one Identity Server cluster took about 30 seconds and saved about 390 files.
 
+## Scheduled backups
+
+```bash
+amcli backup /var/backups/amcli --keep 30 --exit-code
+```
+
+`backup` is `export` made for a schedule. Each run:
+
+1. exports the console into a new folder named for the time, such as `2026-11-16T03-00-00Z`;
+2. compares it with the previous backup, as `diff` does;
+3. lists certificates that have expired or expire within `--expiring` days (default 30);
+4. removes the oldest backups so that `--keep` remain (default 30).
+
+The result says what changed and which certificates need attention. With `--exit-code` it exits 9 when either is the case, so a scheduler can alert on it. Beside each export, `_backup/` holds what the run worked out: `changes.json` (the full comparison), `certs.json`, `report.md` (what uses what, as `amcli report` writes it) and `backup.json` (the result). `diff` leaves `_backup/` out, so backups compare with each other and with other exports.
+
+- **A failed run leaves nothing behind.** The export is written to `<name>.partial` and renamed when complete, and only complete backups count as the previous one or are ever removed. `backup` removes only folders it named, never anything else in the folder.
+- **Expired certificates nothing uses** would alert every night. `--ignore-cert <name>` (repeatable) leaves them out.
+- **Secrets** are blanked unless `--reveal-secrets`, as with `export`. Either way, a backup folder `backup` creates is readable by its owner alone, since it describes the whole setup.
+- **What to alert on:** a configuration change, an expiring certificate, or the run failing (any other non-zero exit). Reads the console itself fails, listed in `manifest.json`, are counted in `failedReads` but don't alert, since some console versions always fail a few.
+
+With cron, which mails a job's output, this mails the result only when something changed or the run failed:
+
+```bash
+0 3 * * * amcli --env-file /etc/amcli/amcli.env -q backup /var/backups/amcli --exit-code > /var/log/amcli-backup.json 2>&1 || cat /var/log/amcli-backup.json
+```
+
+For systemd, [examples/backup](examples/backup) has a service and a nightly timer; exit 9 marks the run failed, so `OnFailure=` can send the alert. A run against a test console took about 40 seconds.
+
 ## Comparing configurations
 
 ```bash
@@ -231,7 +261,7 @@ The console's APIs can't list keystores or create trusted roots, so `certs` read
 ## For scripts and agents
 
 - **One JSON document on stdout** for every result; progress messages go to stderr (`--quiet` stops them).
-- **Errors** are `{"error": {"code": ..., "message": ...}}` on stderr, with an exit code to match: 2 usage, 3 not found, 4 authentication, 5 rejected by the console, 6 connection, 7 timeout, 8 needs `--yes`. Exit code 9 isn't an error: `diff --exit-code` and `certs list --fail` use it to say something was found.
+- **Errors** are `{"error": {"code": ..., "message": ...}}` on stderr, with an exit code to match: 2 usage, 3 not found, 4 authentication, 5 rejected by the console, 6 connection, 7 timeout, 8 needs `--yes`. Exit code 9 isn't an error: `diff --exit-code`, `certs list --fail` and `backup --exit-code` use it to say something was found.
 - **Self-describing:** `amcli describe` lists every command, option, setting and exit code as JSON.
 - **Secrets hidden:** passwords, keys, tokens and values such as a recovery pepper print as `<redacted>`, including in `api` output and dry-run plans. `--reveal-secrets` turns this off.
 - **Guarded:** deletes, `update` and raw `api` calls other than GET need `--yes`; every write takes `--dry-run`.

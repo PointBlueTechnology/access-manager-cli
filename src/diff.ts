@@ -226,6 +226,7 @@ export function diffExports(a: string, b: string, options: DiffOptions = {}): Di
     const ignore = new Set([...ALWAYS_IGNORED, ...(options.includeStatus ? [] : STATUS_KEYS), ...(options.ignore ?? [])]);
     const wanted = (file: string) =>
         file !== 'manifest.json'
+        && !file.startsWith('_backup/')
         && !file.endsWith('/_api-description.json')
         && (!options.only?.length || options.only.some(prefix => file === prefix || file.startsWith(`${prefix.replace(/\/$/, '')}/`)));
     const filesA = new Set(filesIn(a).filter(wanted));

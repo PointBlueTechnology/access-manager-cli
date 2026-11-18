@@ -2,6 +2,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import * as afc from './afc.ts';
 import { Backup, execute, plan, readApplyFile } from './apply.ts';
+import { runBackup } from './backup.ts';
 import { getCert, listCerts } from './certs.ts';
 import * as saml from './saml.ts';
 import { diffExports, exportedApis } from './diff.ts';
@@ -528,6 +529,46 @@ export const COMMANDS: Command[] = [
         },
     },
     {
+        name: 'backup', summary: 'For a schedule: export into a new dated folder, compare with the last backup, check certificates, and keep the newest --keep', args: '<folder>',
+        options: {
+            keep: { type: 'string', description: 'How many backups to keep, newest first (default 30)' },
+            expiring: { type: 'string', description: 'Report certificates expiring within this many days, expired ones included (default 30)' },
+            'ignore-cert': { type: 'string', multiple: true, description: 'A certificate not to report, such as an expired one nothing uses (repeatable)' },
+            api: { type: 'string', multiple: true, description: 'Which APIs: nps, amsvc, or both (default)' },
+            'afc-files': { type: 'boolean', description: 'Also save the files the Advanced File Configurator keeps' },
+            'exit-code': { type: 'boolean', description: 'Exit with 9 if the configuration changed since the last backup or a certificate is expiring, as for alerts' },
+        },
+        run: async c => {
+            const [root, ...rest] = c.positionals;
+            if (!root || rest.length) {
+                throw usage('backup takes one folder, which holds the dated backups');
+            }
+            const keep = int(c, 'keep') ?? 30;
+            const expiringDays = int(c, 'expiring') ?? 30;
+            if (keep < 1 || expiringDays < 0) {
+                throw usage('--keep must be at least 1 and --expiring at least 0');
+            }
+            const apis = list(c, 'api');
+            for (const api of apis) {
+                if (api !== 'nps' && api !== 'amsvc') {
+                    throw usage(`--api is nps or amsvc, not ${api}`);
+                }
+            }
+            const { result, alert } = await runBackup(c.nam(), {
+                root, keep, expiringDays,
+                ignoreCerts: list(c, 'ignore-cert'),
+                apis: (apis.length ? apis : ['nps', 'amsvc']) as ('nps' | 'amsvc')[],
+                afcFiles: flag(c, 'afc-files'),
+                revealSecrets: flag(c, 'reveal-secrets'),
+                quiet: c.quiet,
+            });
+            if (flag(c, 'exit-code') && alert) {
+                process.exitCode = EXIT.DIFFERENT;
+            }
+            return result;
+        },
+    },
+    {
         name: 'diff', summary: 'Compare two exports, or an export with the console as it is now (--live)', args: '<export> [<export>]',
         options: {
             live: { type: 'boolean', description: 'Compare the export with a fresh export of the console' },
@@ -799,7 +840,7 @@ export const GLOBAL_OPTIONS: Record<string, OptionSpec> = {
     help: { type: 'boolean', short: 'h', description: 'Help for the command' },
 };
 
-export const VERSION = '0.5.0';
+export const VERSION = '0.6.0';
 
 export function describe(): unknown {
     return {
@@ -821,7 +862,7 @@ export function describe(): unknown {
             AMCLI_TIMEOUT_MS: 'Per-request timeout (default 60000)',
             AMCLI_ENV_FILE: 'Env file to load these from',
         },
-        exitCodes: { 0: 'ok', 1: 'error', 2: 'usage', 3: 'not found', 4: 'authentication', 5: 'rejected by the console', 6: 'connection', 7: 'timeout', 8: 'needs --yes' },
+        exitCodes: { 0: 'ok', 1: 'error', 2: 'usage', 3: 'not found', 4: 'authentication', 5: 'rejected by the console', 6: 'connection', 7: 'timeout', 8: 'needs --yes', 9: 'not an error: something was found (diff --exit-code, certs list --fail, backup --exit-code)' },
         globalOptions: GLOBAL_OPTIONS,
         commands: COMMANDS.map(command => ({
             command: command.name,

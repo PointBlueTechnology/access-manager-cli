@@ -1,0 +1,21 @@
+# Backs up the Access Manager console with amcli. Runs from amcli-backup.timer.
+#
+# Exit code 9 means the configuration changed since the last backup or a certificate is
+# expiring; systemd then marks the run failed, so OnFailure= can send the alert. The result
+# (what changed, which certificates) is in the journal: journalctl -u amcli-backup
+#
+# Install: copy both files to /etc/systemd/system, then
+#   systemctl daemon-reload && systemctl enable --now amcli-backup.timer
+
+[Unit]
+Description=Back up the Access Manager console configuration
+Wants=network-online.target
+After=network-online.target
+# OnFailure=notify-admin@%n.service
+
+[Service]
+Type=oneshot
+User=amcli
+# AMCLI_URL, AMCLI_USER, AMCLI_PASSWORD_FILE and AMCLI_CA_FILE; readable by the amcli user alone
+ExecStart=/usr/local/bin/amcli --env-file /etc/amcli/amcli.env --quiet backup /var/backups/amcli --keep 30 --exit-code
+UMask=0077

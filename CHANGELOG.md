@@ -2,6 +2,14 @@
 
 All notable changes to this project are listed here. Versions follow [Semantic Versioning](https://semver.org).
 
+## 0.6.0
+
+- `amcli backup <folder>`: an export made for a schedule. Each run exports into a new folder named for the time, compares it with the previous backup, lists certificates expired or expiring within `--expiring` days (default 30), writes the what-uses-what report, and removes the oldest so `--keep` remain (default 30). `--exit-code` exits 9 when the configuration changed or a certificate needs attention; `--ignore-cert` leaves out ones nothing uses. A failed run leaves nothing behind, and only folders `backup` named are ever removed
+- [examples/backup](examples/backup): a systemd service and nightly timer
+- `diff` leaves out the `_backup/` folder that `backup` writes beside each export
+- `--version` and `help` work after global options, as in `amcli --env-file x --version`
+- `describe` lists exit code 9
+
 ## 0.5.0
 
 - `amcli diff`: compares two exports, or an export with the console now (`--live`). Lists are paired by ID or name, each console's address is normalized, and timestamps, pending-Update and health status and the generated parts of signed SAML metadata don't count. `--exit-code` exits 9 when they differ

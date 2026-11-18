@@ -40,6 +40,8 @@ amcli class get Passkey1             # secrets show as <redacted>
 
 `amcli export --out <new folder>` saves everything both console APIs can read (secrets blanked), with `manifest.json` listing skips and failures. `--reveal-secrets` only if the user asks; the folder then holds secrets.
 
+For regular backups use `amcli backup <folder> --exit-code`: a dated export, what changed since the last backup, expiring certificates, and the oldest removed beyond `--keep`. Exit 9 means something changed or a certificate needs attention; read `changes` and `certificates` in the result. It removes only the dated folders it made.
+
 ## Reports
 
 - Before changing or deleting a contract, method or class: `amcli report --markdown <file>` shows what uses it (`--ag` adds Access Gateway resources).
@@ -52,4 +54,4 @@ amcli class get Passkey1             # secrets show as <redacted>
 
 ## Errors
 
-Failures print `{"error": {"code", "message"}}` on stderr. Exit codes: 2 usage, 3 not found (see `error.details.available`), 4 authentication, 5 rejected by the console, 6 connection, 7 timeout, 8 needs `--yes`.
+Failures print `{"error": {"code", "message"}}` on stderr. Exit codes: 2 usage, 3 not found (see `error.details.available`), 4 authentication, 5 rejected by the console, 6 connection, 7 timeout, 8 needs `--yes`. Exit 9 isn't an error: `diff --exit-code`, `certs list --fail` or `backup --exit-code` found something.

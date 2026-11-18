@@ -39,6 +39,7 @@
 
 - `amcli report --markdown <file>` answers "what uses this contract/method/class?" before you change or delete one. `--ag` adds Access Gateway resources; it makes a Code Promotion export on the console and deletes it again.
 - `amcli diff <export> --live --summary` shows what changed since an export.
+- `amcli backup <folder> --exit-code` is the scheduled form: a dated export, the changes since the last one, expiring certificates, and rotation (`--keep`). Exit 9 means something to look at, not an error.
 - `amcli certs list --expiring 30` lists certificates close to expiry.
 
 ## Anything else

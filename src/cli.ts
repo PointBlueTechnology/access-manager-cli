@@ -82,13 +82,16 @@ function help(command?: Command): string {
 }
 
 async function main(argv: string[]): Promise<number> {
-    if (!argv.length || argv[0] === 'help' || argv[0] === '--help' || argv[0] === '-h') {
-        const { command } = findCommand(argv.slice(argv[0] === 'help' ? 1 : 0));
-        process.stdout.write(help(command) + '\n');
+    // help and --version may follow global options too: amcli --env-file x --version
+    const globals = argv.slice(0, leadingGlobals(argv));
+    const first = argv[globals.length];
+    if (first === '--version' || first === 'version') {
+        process.stdout.write(`${VERSION}\n`);
         return 0;
     }
-    if (argv[0] === '--version' || argv[0] === 'version') {
-        process.stdout.write(`${VERSION}\n`);
+    if (first === undefined || first === 'help' || argv[0] === '--help' || argv[0] === '-h') {
+        const { command } = findCommand(argv.slice(globals.length + (first === 'help' ? 1 : 0)));
+        process.stdout.write(help(command) + '\n');
         return 0;
     }
     const { command, rest } = findCommand(argv);
